@@ -297,11 +297,20 @@ for (const configured of [false, true]) test(`public page boots with ${configure
   const geometry = () => element('chart').querySelectorAll().map(track=>({id:track.attrs['data-evb'],path:track.children.find(node=>node.attrs.class==='trajectory').attrs.d}));
   const allGeometry = geometry();
   const allBoardPositions = boardTicks().map(node=>node.attrs.y);
+  const labelLayer = () => element('chart').children.find(node=>node.attrs.class==='line-labels');
+  const labels = () => labelLayer().children.filter(node=>node.attrs.class==='evb-line-label');
+  const labeledIDs = () => labels().map(node=>node.attrs['data-evb-label']).sort();
+  assert.deepEqual(labeledIDs(),[],'No labels before selection');
   const clickLine = id => {
     const line=element('chart').querySelectorAll().find(track=>track.attrs['data-evb']===id);
     element('chart').events.click({target:{closest:()=>line},stopPropagation(){}});
   };
   clickLine('DEMO-EVB');
+  assert.deepEqual(labeledIDs(),['DEMO-EVB'],'Clicking a line adds its EVB label');
+  assert.equal(labels()[0].textContent,'EVB DEMO-EVB');
+  const selectedPath=element('chart').querySelectorAll().find(track=>track.attrs['data-evb']==='DEMO-EVB').children.find(node=>node.attrs.class==='trajectory');
+  assert.equal(labels()[0].attrs.fill,selectedPath.attrs.stroke,'Label matches the line color');
+  assert.equal(labelLayer().attrs['pointer-events'],'none','Labels do not block clicking bright or dimmed lines');
   assert.deepEqual(bright(),['DEMO-EVB']);
   assert.deepEqual(boards(),['BOARD-A','BOARD-B','BOARD-C','BOARD-D'],'All board rows remain visible');
   assert.deepEqual(brightBoards(),['BOARD-A','BOARD-C'],'Only related board labels stay bright');
@@ -316,23 +325,41 @@ for (const configured of [false, true]) test(`public page boots with ${configure
     assert.ok(Number(hit.attrs['stroke-width'])>=8,'Lines have a wider click target');
   }
   clickLine('DEMO-B');
+  assert.deepEqual(labeledIDs(),['DEMO-B','DEMO-EVB'],'Multiple selected lines each have a label');
   assert.deepEqual(bright(),['DEMO-B','DEMO-EVB'],'Clicking a dim line adds it to the selection');
   assert.deepEqual(brightBoards(),['BOARD-A','BOARD-C','BOARD-D'],'Multiple selections brighten the union of related boards');
   run('zoomTimeline(2);applyData({...data,records:[...data.records]})');
+  assert.deepEqual(labeledIDs(),['DEMO-B','DEMO-EVB'],'Labels survive zoom and data refresh');
+  const oldLabelX=labels().find(node=>node.attrs['data-evb-label']==='DEMO-EVB').attrs.x;
+  element('timeline-scroll').scrollLeft=Number(element('chart').attrs.width)-element('timeline-scroll').clientWidth;
+  element('timeline-scroll').events.scroll();
+  assert.notEqual(labels().find(node=>node.attrs['data-evb-label']==='DEMO-EVB').attrs.x,oldLabelX,'Labels follow the visible part when scrolling');
+  for (const label of labels()) {
+    assert.ok(Number(label.attrs.x)>element('timeline-scroll').scrollLeft);
+    assert.ok(Number(label.attrs.x)<element('timeline-scroll').scrollLeft+element('timeline-scroll').clientWidth);
+  }
   assert.deepEqual(bright(),['DEMO-B','DEMO-EVB']);
   assert.deepEqual(brightBoards(),['BOARD-A','BOARD-C','BOARD-D'],'Zoom and refresh preserve highlighting');
   clickLine('DEMO-EVB');
+  assert.deepEqual(labeledIDs(),['DEMO-B'],'Deselecting removes only that line label');
   assert.deepEqual(bright(),['DEMO-B'],'Clicking a bright line again dims it');
   assert.deepEqual(brightBoards(),['BOARD-C','BOARD-D']);
   choose('DEMO-C');
+  assert.deepEqual(labeledIDs(),['DEMO-B','DEMO-C'],'Sidebar selection also labels the line');
   assert.deepEqual(bright(),['DEMO-B','DEMO-C'],'Sidebar and line selections stay in sync');
   element('chart').events.click({target:{closest:()=>null}});
+  assert.deepEqual(labeledIDs(),[],'Blank chart space removes all labels');
   assert.deepEqual(brightBoards(),boards(),'Blank chart space restores all board brightness');
   assert.equal(bright().length,3);
   clickLine('DEMO-B');
   documentEvents.click({target:{closest:()=>null}});
+  assert.deepEqual(labeledIDs(),[],'Blank page space removes all labels');
   assert.deepEqual(brightBoards(),boards(),'Blank page space restores all board brightness');
   assert.equal(bright().length,3);
+  run('applyData({...data,platforms:["SHARED-BOARD"],records:[{evb:"LABEL-A",platform:"SHARED-BOARD",date:"2026-09-01",number:1},{evb:"LABEL-B",platform:"SHARED-BOARD",date:"2026-09-01",number:2}]});select(["LABEL-A","LABEL-B"])');
+  assert.deepEqual(labeledIDs(),['LABEL-A','LABEL-B'],'Single-date lines can be labeled');
+  assert.ok(Math.abs(Number(labels()[0].attrs.y)-Number(labels()[1].attrs.y))>=18,'Nearby labels avoid overlapping');
+  assert.ok(!/NaN|Infinity/.test(JSON.stringify(labelLayer().children)));
   element('disconnect-google').events.click({stopPropagation(){}});
   assert.equal(run('data.records.length'),0);
   assert.equal(run('histories.size'),0);

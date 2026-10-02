@@ -463,6 +463,7 @@ function makeChart(next, requestedWidth) {
   const width = requestedWidth || Math.max(1600, (dates.length - 1) * dateSpacing(dates) + left + right);
   const x = date => left + slots.get(date) / Math.max(1, dates.length - 1) * (width - left - right);
   const positions = new Map();
+  const labels = [];
   const svg = svgNode('svg', {viewBox: `0 0 ${width} ${height}`});
   svg.append(svgNode('title', {id: 'svg-title'}, 'EVB platform history chart'),
     svgNode('desc', {id: 'svg-description'}, 'Recorded dates are equally spaced on the horizontal axis, regardless of elapsed time. Platforms are on the vertical axis. Each line represents one EVB.'));
@@ -497,12 +498,49 @@ function makeChart(next, requestedWidth) {
       const circle = svgNode('circle', {cx:x(r.date),cy:positions.get(JSON.stringify([r.platform,evb])),r:3,fill:color,stroke:'#131e2d','stroke-width':1});
       circle.append(svgNode('title', {}, `EVB ${evb} · ${r.platform} · ${r.date} · #${r.number}`)); group.append(circle);
     });
+    if (selected.has(evb)) labels.push({evb, color, points: records.map(record => ({
+      x: x(record.date), y: positions.get(JSON.stringify([record.platform, evb]))
+    }))});
     svg.append(group);
   });
-  return svg;
+  return {svg, labels};
 }
 const timeline = $('timeline-scroll');
 let timelineZoom = 1, viewportWidth = timeline.clientWidth, renderedDates = [];
+let lineLabels = [], lineLabelLayer = null;
+function updateLineLabels() {
+  if (!lineLabelLayer) return;
+  lineLabelLayer.replaceChildren();
+  const chartRight = Number(chart.getAttribute('width')) - 30;
+  const visibleLeft = Math.max(126, timeline.scrollLeft + 8);
+  const visibleRight = Math.min(chartRight, timeline.scrollLeft + timeline.clientWidth - 8);
+  const maxY = Number(chart.getAttribute('height')) - 62;
+  const occupied = [];
+  for (const {evb, color, points} of lineLabels) {
+    // Attach to the longest horizontal part currently in view, including a lone point.
+    const segments = points.map((point, index) => ({
+      left: Math.max(point.x, visibleLeft),
+      right: Math.min(points[index + 1]?.x ?? chartRight, visibleRight),
+      y: point.y
+    })).filter(segment => segment.right >= segment.left).sort((a,b) => (b.right-b.left)-(a.right-a.left));
+    if (!segments.length) continue;
+    const segment = segments[0], name = `EVB ${evb}`, halfWidth = name.length * 3.6 + 5;
+    const px = Math.max(visibleLeft + halfWidth, Math.min(visibleRight - halfWidth, (segment.left + segment.right) / 2));
+    let py = segment.y - 10;
+    for (let attempt = 0; attempt < lineLabels.length * 2 + 4; attempt++) {
+      const candidate = segment.y + (attempt % 2 ? 20 + Math.floor(attempt / 2) * 18 : -10 - Math.floor(attempt / 2) * 18);
+      if (candidate < 16 || candidate > maxY) continue;
+      py = candidate;
+      if (!occupied.some(box => Math.abs(px-box.x) < halfWidth+box.halfWidth && Math.abs(py-box.y) < 18)) break;
+    }
+    occupied.push({x:px,y:py,halfWidth});
+    const anchorX = Math.max(segment.left, Math.min(segment.right, px));
+    lineLabelLayer.append(svgNode('path', {d:`M ${anchorX} ${segment.y} L ${px} ${py < segment.y ? py + 4 : py - 13}`,fill:'none',stroke:color,'stroke-width':1,opacity:.65}));
+    lineLabelLayer.append(svgNode('text', {class:'evb-line-label','data-evb-label':evb,x:px,y:py,
+      'text-anchor':'middle','font-size':12,'font-weight':700,fill:color,stroke:'#131e2d',
+      'stroke-width':4,'stroke-linejoin':'round','paint-order':'stroke'},name));
+  }
+}
 function timelineAnchor(anchorX = viewportWidth / 2) {
   if (!renderedDates.length) return NaN;
   const width = Number(chart.getAttribute('width'));
@@ -521,11 +559,11 @@ function renderTimeline(anchorDate, anchorX = timeline.clientWidth / 2) {
   $('zoom-range').value = Math.round(timelineZoom * 100);
   $('zoom-value').textContent = Math.round(timelineZoom * 100) + '%';
   viewportWidth = timeline.clientWidth;
-  if (!hasData) renderedDates = [];
+  if (!hasData) {renderedDates = [];lineLabels = [];lineLabelLayer = null;}
   if (!hasData || !viewportWidth) return;
   const dates = recordedDates(data);
   const plotWidth = Math.max(1, viewportWidth - 156, (dates.length - 1) * dateSpacing(dates)) * timelineZoom;
-  const svg = makeChart(data, plotWidth + 156);
+  const {svg, labels} = makeChart(data, plotWidth + 156);
   chart.setAttribute('viewBox', svg.getAttribute('viewBox'));
   const [, , width, height] = svg.getAttribute('viewBox').split(' ');
   chart.setAttribute('width', width);
@@ -534,10 +572,14 @@ function renderTimeline(anchorDate, anchorX = timeline.clientWidth / 2) {
   chart.style.minWidth = width + 'px';
   chart.style.height = height + 'px';
   chart.replaceChildren(...svg.childNodes);
+  lineLabels = labels;
+  lineLabelLayer = svgNode('g', {class:'line-labels','pointer-events':'none'});
+  chart.append(lineLabelLayer);
   const fraction = Number.isFinite(anchorDate) ? dateSlot(anchorDate, dates) / Math.max(1, dates.length - 1) : 0;
   renderedDates = dates;
   timeline.scrollLeft = Math.max(0, Math.min(Number(width) - viewportWidth, 126 + fraction * plotWidth - anchorX));
   draw();
+  updateLineLabels();
 }
 function zoomTimeline(value, anchorX = timeline.clientWidth / 2) {
   if (!data.records.length) return;
@@ -550,6 +592,7 @@ $('zoom-range').addEventListener('input', event => zoomTimeline(Number(event.tar
 $('zoom-out').addEventListener('click', () => zoomTimeline(timelineZoom / 1.25));
 $('zoom-in').addEventListener('click', () => zoomTimeline(timelineZoom * 1.25));
 $('zoom-fit').addEventListener('click', () => zoomTimeline(1));
+timeline.addEventListener('scroll', updateLineLabels, {passive:true});
 timeline.addEventListener('wheel', event => {
   if (!(event.ctrlKey || event.metaKey) || !data.records.length) return;
   event.preventDefault();
