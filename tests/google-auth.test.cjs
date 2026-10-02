@@ -261,6 +261,35 @@ for (const configured of [false, true]) test(`public page boots with ${configure
   choose('DEMO-B');choose('DEMO-C');
   run('applyData({...data,records:data.records.filter(record=>record.evb!=="DEMO-B")})');
   assert.deepEqual(visible(),['DEMO-C'],'Refresh drops removed devices and retains remaining selections');
+  run('select(null);applyData({...data,records:[{evb:"DEMO-B",platform:"DEMO-PLATFORM",date:"2027-01-01",number:4},{evb:"DEMO-EVB",platform:"DEMO-PLATFORM",date:"2026-09-01",number:1},{evb:"DEMO-EVB",platform:"DEMO-PLATFORM",date:"2026-09-02",number:2},{evb:"DEMO-B",platform:"DEMO-PLATFORM",date:"2026-09-02",number:3}]})');
+  assert.deepEqual(dates(),['2026-09-01','2026-09-02','2027-01-01'],'Axis contains only unique recorded dates, sorted across years');
+  const ticks = () => element('chart').children.filter(node => node.attrs.class === 'date-tick');
+  const positions = ticks().map(node => Number(node.attrs.x));
+  assert.ok(Math.abs((positions[1]-positions[0])-(positions[2]-positions[1]))<0.001,'One-day and multi-month gaps occupy equal widths');
+  assert.deepEqual(ticks().map(node=>node.textContent),dates(),'Cross-year labels include years');
+  for (const track of element('chart').querySelectorAll()) {
+    for (const circle of track.children.filter(node => node.attrs.cx !== undefined)) {
+      const date = circle.children[0].textContent.split(' · ')[2];
+      assert.equal(circle.attrs.cx,ticks().find(tick=>tick.attrs['data-date']===date).attrs.x,'Record points align with ordinal date ticks');
+    }
+  }
+  const anchor = run('timelineAnchor()');
+  run('zoomTimeline(3)');
+  assert.ok(Math.abs(run('timelineAnchor()')-anchor)<1,'Ordinal zoom preserves the date beneath the viewport center');
+  run('applyData({...data,records:[...data.records,{evb:"DEMO-EVB",platform:"DEMO-PLATFORM",date:"2026-10-01",number:5}]})');
+  assert.ok(Math.abs(run('timelineAnchor()')-anchor)<1,'Adding a date preserves the viewport anchor');
+  choose('DEMO-B');
+  assert.deepEqual(dates(),['2026-09-02','2027-01-01']);
+  const filteredPositions=ticks().map(node=>Number(node.attrs.x));
+  assert.equal(filteredPositions[0],126,'Filtered dates reflow from the start of the axis');
+  assert.equal(filteredPositions[1],Number(element('chart').attrs.width)-30);
+  run('select(null);applyData({...data,records:[{evb:"DEMO-EVB",platform:"DEMO-PLATFORM",date:"2026-09-01",number:1}]})');
+  assert.deepEqual(dates(),['2026-09-01']);
+  assert.ok(!/NaN|Infinity/.test(JSON.stringify(element('chart').children)),'Single-date geometry is finite');
+  run('applyData({...data,records:Array.from({length:25},(_,i)=>({evb:"DEMO-EVB",platform:"DEMO-PLATFORM",date:"2026-09-"+String(i+1).padStart(2,"0"),number:i+1}))});zoomTimeline(1)');
+  assert.equal(dates().length,25,'Dense axes retain every recorded date');
+  assert.ok(Number(element('chart').attrs.width)>element('timeline-scroll').clientWidth,'Dense axes scroll horizontally');
+  assert.ok(Number(ticks()[1].attrs.x)-Number(ticks()[0].attrs.x)>=64,'Labels retain readable spacing');
   element('disconnect-google').events.click({stopPropagation(){}});
   assert.equal(run('data.records.length'),0);
   assert.equal(run('histories.size'),0);

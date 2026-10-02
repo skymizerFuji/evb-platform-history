@@ -34,7 +34,7 @@ main{min-width:0;padding:26px 30px}.summary{display:flex;align-items:center;gap:
 </section>
 <div class="workspace"><aside aria-label="Select one or more EVBs"><div class="aside-title">EVB list <span class="count" id="list-count"></span></div><p class="aside-hint">Select multiple devices. Click blank space to clear.</p><input id="search" type="search" placeholder="Search EVB ID…" aria-label="Search EVB ID"><button class="all" id="show-all" aria-pressed="true">Show all EVBs</button><div class="evb-list" id="evb-list"></div></aside><main>
 <p class="sync-status" id="sync-status" role="status" aria-live="polite">Checking data source…</p><div class="summary"><div class="metric"><strong id="evb-count"></strong><span>EVBs</span></div><div class="metric"><strong id="platform-count"></strong><span>Platforms</span></div><div class="metric"><strong id="record-count"></strong><span>Records</span></div><div class="period" id="period"></div></div>
-<section class="panel" aria-labelledby="chart-title"><div class="chart-heading"><div><h2 id="chart-title">All EVB platform histories</h2><p class="hint" id="chart-hint">Select one or more EVBs from the list or click lines to compare their histories.</p></div><span class="selection" id="selection" aria-live="polite">Showing all</span></div><p class="interaction-note" id="interaction-note">The chart is available below. If the EVB list is missing, enable JavaScript to use filtering.</p><div class="timeline-controls" id="timeline-controls" role="group" aria-label="Time axis zoom" hidden><label for="zoom-range">Time zoom</label><button id="zoom-out" type="button" aria-label="Zoom out time axis">−</button><input id="zoom-range" type="range" min="100" max="800" step="1" value="100" aria-controls="chart"><button id="zoom-in" type="button" aria-label="Zoom in time axis">+</button><output id="zoom-value" for="zoom-range">100%</output><button id="zoom-fit" type="button">Fit all dates</button></div><p class="timeline-hint" id="timeline-hint">Zoom with the slider or Ctrl / ⌘ + scroll · Drag the scrollbar or swipe to browse dates.</p><div id="timeline-scroll" class="chart-scroll" tabindex="0" role="region" aria-label="Scrollable timeline" aria-describedby="timeline-hint"><svg id="chart" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 670" width="1100" height="670" role="img" aria-labelledby="svg-title svg-description"><title id="svg-title">EVB platform history chart</title><desc id="svg-description">Sign in to view authorized Google Sheets data.</desc><text x="30" y="180" fill="#a6b7cb" font-size="14">Sign in to view Google Sheets data.</text></svg></div><div class="chart-note"><b>● Recorded date</b>　Lines continue until the next change or the end of the date range. Lines on the same platform are slightly offset for clarity.</div></section>
+<section class="panel" aria-labelledby="chart-title"><div class="chart-heading"><div><h2 id="chart-title">All EVB platform histories</h2><p class="hint" id="chart-hint">Select one or more EVBs from the list or click lines to compare their histories.</p></div><span class="selection" id="selection" aria-live="polite">Showing all</span></div><p class="interaction-note" id="interaction-note">The chart is available below. If the EVB list is missing, enable JavaScript to use filtering.</p><div class="timeline-controls" id="timeline-controls" role="group" aria-label="Time axis zoom" hidden><label for="zoom-range">Time zoom</label><button id="zoom-out" type="button" aria-label="Zoom out time axis">−</button><input id="zoom-range" type="range" min="100" max="800" step="1" value="100" aria-controls="chart"><button id="zoom-in" type="button" aria-label="Zoom in time axis">+</button><output id="zoom-value" for="zoom-range">100%</output><button id="zoom-fit" type="button">Reset zoom</button></div><p class="timeline-hint" id="timeline-hint">Recorded dates are equally spaced · Zoom with the slider or Ctrl / ⌘ + scroll · Scroll horizontally to see every date.</p><div id="timeline-scroll" class="chart-scroll" tabindex="0" role="region" aria-label="Scrollable timeline" aria-describedby="timeline-hint"><svg id="chart" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 670" width="1100" height="670" role="img" aria-labelledby="svg-title svg-description"><title id="svg-title">EVB platform history chart</title><desc id="svg-description">Sign in to view authorized Google Sheets data.</desc><text x="30" y="180" fill="#a6b7cb" font-size="14">Sign in to view Google Sheets data.</text></svg></div><div class="chart-note"><b>● Recorded date</b>　Lines continue until the next change or the end of the date range. Lines on the same platform are slightly offset for clarity.</div></section>
 <section class="panel detail" aria-labelledby="detail-title"><div class="detail-head"><h2 id="detail-title">EVB details</h2><span id="detail-meta"></span></div><div id="detail-content"><p class="instructions">Select one or more EVBs to see their dates, platforms, and record numbers.</p></div></section>
 <footer>For the same EVB and date, the highest # takes precedence. Ties favor records with History unchecked. Year: <span id="year"></span>.</footer></main></div><div class="tooltip" id="tooltip" hidden></div>
 <script id="public-config">globalThis.EVB_PUBLIC_CONFIG = {"clientId": "691636098388-v0ab9l58vnq11bfg18qka2pc0qo5o7fp.apps.googleusercontent.com", "sheetName": ""};
@@ -435,19 +435,33 @@ function svgNode(tag, attributes = {}, text) {
   if (text !== undefined) node.textContent = text;
   return node;
 }
+function recordedDates(next) {
+  return [...new Set(next.records.filter(record => !selected.size || selected.has(record.evb))
+    .map(record => record.date))].sort();
+}
+function dateSpacing(dates) {
+  return dates.length && dates[0].slice(0, 4) !== dates[dates.length - 1].slice(0, 4) ? 100 : 64;
+}
+// Interpolate only for preserving the viewport anchor between ordinal date slots.
+function dateSlot(timestamp, dates) {
+  if (dates.length < 2 || timestamp <= day(dates[0])) return 0;
+  for (let i = 1; i < dates.length; i++) {
+    if (timestamp <= day(dates[i])) return i - 1 + (timestamp - day(dates[i - 1])) / (day(dates[i]) - day(dates[i - 1]));
+  }
+  return dates.length - 1;
+}
 function makeChart(next, requestedWidth) {
   const height = Math.max(670, next.platforms.length * 38 + 98);
   const left = 126, right = 30, top = 36, bottom = 62;
   const rowHeight = (height - top - bottom) / next.platforms.length;
   const ids = [...new Set(next.records.map(r => r.evb))].sort((a, b) => a.localeCompare(b, 'en', {numeric: true}));
-  const first = Math.min(...next.records.map(r => day(r.date))), last = Math.max(...next.records.map(r => day(r.date)));
-  const span = Math.round((last - first) / 86400000);
-  const width = requestedWidth || Math.max(1600, span * 48 + left + right);
-  const x = date => left + (day(date) - first) / Math.max(86400000, last - first) * (width - left - right);
+  const dates = recordedDates(next), slots = new Map(dates.map((date, index) => [date, index]));
+  const width = requestedWidth || Math.max(1600, (dates.length - 1) * dateSpacing(dates) + left + right);
+  const x = date => left + slots.get(date) / Math.max(1, dates.length - 1) * (width - left - right);
   const positions = new Map();
   const svg = svgNode('svg', {viewBox: `0 0 ${width} ${height}`});
   svg.append(svgNode('title', {id: 'svg-title'}, 'EVB platform history chart'),
-    svgNode('desc', {id: 'svg-description'}, 'Dates are on the horizontal axis and platforms on the vertical axis. Each line represents one EVB.'));
+    svgNode('desc', {id: 'svg-description'}, 'Recorded dates are equally spaced on the horizontal axis, regardless of elapsed time. Platforms are on the vertical axis. Each line represents one EVB.'));
   next.platforms.forEach((platform, level) => {
     const members = ids.filter(evb => next.records.some(r => r.evb === evb && r.platform === platform));
     members.forEach((evb, i) => positions.set(JSON.stringify([platform, evb]), top + (level + .5) * rowHeight +
@@ -455,34 +469,22 @@ function makeChart(next, requestedWidth) {
     if (level % 2 === 0) svg.append(svgNode('rect', {x: left, y: top + level * rowHeight, width: width-left-right, height: rowHeight, fill: '#182538'}));
     svg.append(svgNode('text', {x: left-14, y: top+(level+.5)*rowHeight+4, 'text-anchor': 'end', fill: '#bdcbdd'}, platform));
   });
-  const focusedRecords = selected.size ? next.records.filter(record => selected.has(record.evb)) : null;
-  const ticks = focusedRecords
-    ? new Set(focusedRecords.map(record => Math.round((day(record.date) - first) / 86400000)))
-    : new Set([0, span]);
-  const sameYear = new Date(first).getUTCFullYear() === new Date(last).getUTCFullYear();
-  const tickSpacing = sameYear ? 64 : 100;
-  const tickCount = Math.max(1, Math.floor((width - left - right) / tickSpacing));
-  if (!focusedRecords) {
-    for (let i = 0; i <= span; i += Math.max(1, Math.ceil(span / tickCount))) ticks.add(i);
-  }
-  let previousLabelX = -Infinity, labelRow = 0;
-  [...ticks].sort((a,b) => a-b).forEach(offset => {
-    const date = new Date(first + offset * 86400000).toISOString().slice(0,10), px = x(date);
-    if (!focusedRecords && offset > 0 && offset < span && width - right - px < tickSpacing) return;
-    labelRow = focusedRecords && px - previousLabelX < tickSpacing ? 1 - labelRow : 0;
-    previousLabelX = px;
+  const sameYear = dateSpacing(dates) === 64;
+  dates.forEach(date => {
+    const px = x(date);
     svg.append(svgNode('path', {class: 'date-grid', 'data-date': date, d: `M ${px} ${top} V ${height-bottom}`, stroke: '#2a394e', fill: 'none'}));
-    svg.append(svgNode('text', {class: 'date-tick', 'data-date': date, x: px, y: height-bottom+23+labelRow*16, 'text-anchor': 'middle', fill: '#a6b7cb'},
+    svg.append(svgNode('text', {class: 'date-tick', 'data-date': date, x: px, y: height-bottom+23, 'text-anchor': 'middle', fill: '#a6b7cb'},
       sameYear ? date.slice(5).replace('-', '/') : date));
   });
   svg.append(svgNode('text', {x:10,y:18,fill:'#a6b7cb'}, 'Platform / Place'),
     svgNode('text', {x:(left+width-right)/2,y:height-12,'text-anchor':'middle',fill:'#a6b7cb'}, 'Date'));
   ids.forEach((evb, index) => {
+    if (selected.size && !selected.has(evb)) return;
     const records = next.records.filter(r => r.evb === evb).sort((a,b) => a.date.localeCompare(b.date));
     const color = `hsl(${(index*137.508+165)%360},70%,${index%3===0?66:74}%)`;
     const group = svgNode('g', {class:'evb-track', 'data-evb':evb});
     group.append(svgNode('title', {}, `EVB ${evb}`));
-    const path = records.map((r,i) => `${i?'H':'M'} ${x(r.date)} ${i?'V':''} ${positions.get(JSON.stringify([r.platform,evb]))}`).join(' ') + ` H ${x(new Date(last).toISOString().slice(0,10))}`;
+    const path = records.map((r,i) => `${i?'H':'M'} ${x(r.date)} ${i?'V':''} ${positions.get(JSON.stringify([r.platform,evb]))}`).join(' ') + ` H ${x(dates[dates.length - 1])}`;
     group.append(svgNode('path', {class:'trajectory', d:path, fill:'none',stroke:color,'stroke-width':1.8,'stroke-linejoin':'round'}));
     records.forEach(r => {
       const circle = svgNode('circle', {cx:x(r.date),cy:positions.get(JSON.stringify([r.platform,evb])),r:3,fill:color,stroke:'#131e2d','stroke-width':1});
@@ -493,11 +495,14 @@ function makeChart(next, requestedWidth) {
   return svg;
 }
 const timeline = $('timeline-scroll');
-let timelineZoom = 1, viewportWidth = timeline.clientWidth;
+let timelineZoom = 1, viewportWidth = timeline.clientWidth, renderedDates = [];
 function timelineAnchor(anchorX = viewportWidth / 2) {
+  if (!renderedDates.length) return NaN;
   const width = Number(chart.getAttribute('width'));
   const fraction = Math.max(0, Math.min(1, (timeline.scrollLeft + anchorX - 126) / Math.max(1, width - 156)));
-  return start + fraction * (end - start);
+  const slot = fraction * (renderedDates.length - 1), index = Math.floor(slot);
+  const from = day(renderedDates[index]), to = day(renderedDates[Math.min(index + 1, renderedDates.length - 1)]);
+  return from + (slot - index) * (to - from);
 }
 function renderTimeline(anchorDate, anchorX = timeline.clientWidth / 2) {
   const hasData = data.records.length > 0;
@@ -509,8 +514,10 @@ function renderTimeline(anchorDate, anchorX = timeline.clientWidth / 2) {
   $('zoom-range').value = Math.round(timelineZoom * 100);
   $('zoom-value').textContent = Math.round(timelineZoom * 100) + '%';
   viewportWidth = timeline.clientWidth;
+  if (!hasData) renderedDates = [];
   if (!hasData || !viewportWidth) return;
-  const plotWidth = Math.max(1, viewportWidth - 156) * timelineZoom;
+  const dates = recordedDates(data);
+  const plotWidth = Math.max(1, viewportWidth - 156, (dates.length - 1) * dateSpacing(dates)) * timelineZoom;
   const svg = makeChart(data, plotWidth + 156);
   chart.setAttribute('viewBox', svg.getAttribute('viewBox'));
   const [, , width, height] = svg.getAttribute('viewBox').split(' ');
@@ -520,7 +527,8 @@ function renderTimeline(anchorDate, anchorX = timeline.clientWidth / 2) {
   chart.style.minWidth = width + 'px';
   chart.style.height = height + 'px';
   chart.replaceChildren(...svg.childNodes);
-  const fraction = Number.isFinite(anchorDate) && end > start ? (anchorDate - start) / (end - start) : 0;
+  const fraction = Number.isFinite(anchorDate) ? dateSlot(anchorDate, dates) / Math.max(1, dates.length - 1) : 0;
+  renderedDates = dates;
   timeline.scrollLeft = Math.max(0, Math.min(Number(width) - viewportWidth, 126 + fraction * plotWidth - anchorX));
   draw();
 }
