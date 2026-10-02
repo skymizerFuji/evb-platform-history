@@ -218,15 +218,23 @@ if (source.mode === 'google-oauth') {
     sheetName: config.sheetName || '', year: data.year,
     onCleared: clearLiveData, onStatus: updateStatus,
     onAuthorized() {
+      $('remember-google').checked = oauthClient.remembering;
       $('disconnect-google').hidden = false;
       if (activeRequest) refreshQueued = true; else refreshSheet();
     }
   });
+  $('remember-google').checked = oauthClient.remembering;
+  $('remember-google').addEventListener('change', event => {
+    $('remember-google').checked = oauthClient.setRemember(event.target.checked);
+  });
   $('connect-google').hidden = false;
   $('connect-google').addEventListener('click', event => {event.stopPropagation(); oauthClient.connect();});
-  $('disconnect-google').addEventListener('click', event => {event.stopPropagation(); oauthClient.disconnect();});
+  $('disconnect-google').addEventListener('click', event => {
+    event.stopPropagation(); oauthClient.disconnect(); $('remember-google').checked = false;
+  });
   clearLiveData(config.clientId ? 'Sign in with a Google account that can view the source spreadsheet.' :
     'Google sign-in has not been enabled for this website yet. Please contact the site administrator to finish setup.');
+  oauthClient.restore();
   setInterval(() => {if (!document.hidden && oauthClient.connected) refreshSheet();}, source.refreshSeconds * 1000);
 } else if (source.mode === 'apps-script') {
   refreshSheet();

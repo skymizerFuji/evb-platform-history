@@ -14,6 +14,7 @@ main{min-width:0;padding:26px 30px}.summary{display:flex;align-items:center;gap:
 .source-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.source-tools a{color:#89e8ca;text-decoration:none}.refresh{border:1px solid #3d8c7c;border-radius:7px;padding:9px 13px;background:#153b35;color:#8df3d4;font-size:12px}.refresh:disabled{opacity:.5;cursor:default}.sync-status{margin:0 0 18px;color:#a2b1c4;font-size:12px;line-height:1.7;overflow-wrap:anywhere}.sync-status[data-state=error]{color:#f3cf8c}.sync-status[data-state=live]{color:#89e8ca}@media(max-width:620px){header{flex-direction:column}.source-tools .badge{display:block}}
 .timeline-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 24px 8px;font-size:12px}.timeline-controls[hidden]{display:none}.timeline-controls button{border:1px solid #3b556b;border-radius:6px;background:#1b3041;padding:7px 11px;min-height:36px}.timeline-controls button:disabled{opacity:.4;cursor:default}.timeline-controls input[type=range]{appearance:auto;accent-color:#6ee7cc;width:clamp(100px,20vw,240px);padding:0;border:0;background:transparent;min-height:36px}.timeline-controls output{font-variant-numeric:tabular-nums;min-width:42px;color:#8df3d4}
 .login-screen[hidden]{display:none}.login-screen{padding:48px 24px}.login-card{width:min(100%,520px);text-align:center;padding:48px 40px 36px;background:#131e2d;border:1px solid #33485b;border-radius:22px;box-shadow:0 24px 80px #0005}.login-label{display:inline-block;padding:8px 12px;border:1px solid #2e6256;border-radius:100px;color:#8df3d4;background:#15372f;font-size:11px;font-weight:650;letter-spacing:.12em}.login-card h2{margin:24px 0 16px;font-size:clamp(28px,4vw,38px);line-height:1.2;letter-spacing:-.035em}.login-description{font-size:16px;line-height:1.75;color:#b4c4d5;margin:0 0 28px}.login-button{display:block;width:100%;min-height:60px;padding:16px 20px;border:1px solid #8df3d4;border-radius:12px;background:#8df3d4;color:#092b23;font-size:18px;font-weight:700;box-shadow:0 4px 20px #6ee7cc18;transition:background .15s}.login-button:hover{background:#b6ffe9}.login-button:disabled{opacity:.65;cursor:not-allowed}.login-privacy{font-size:12px;color:#a6b8c8;margin:16px 0 22px;line-height:1.7}.login-status{font-size:13px;line-height:1.7;color:#b9cadb;overflow-wrap:anywhere;margin:0 0 18px}.login-status[data-state=error]{color:#f3cf8c;background:#352c1b;border:1px solid #6b5530;border-radius:10px;padding:14px 16px}.login-source{color:#89e8ca;font-size:13px;text-underline-offset:4px}body[data-auth-required=true]{display:flex;flex-direction:column;min-height:100vh;min-height:100svh}body[data-auth-required=true] .workspace,body[data-auth-required=true] header .source-tools{display:none}body[data-auth-required=true] .login-screen{display:grid;flex:1;place-items:center;background:radial-gradient(ellipse at center,#17302d70 0,transparent 65%)}@media(max-width:620px){.login-screen{padding:24px 16px}.login-card{padding:32px 24px 26px;border-radius:18px}.login-card h2{font-size:29px}.login-description{font-size:15px}.login-button{min-height:58px}body[data-auth-required=true] header h1{font-size:20px}}
+.remember-option{display:flex;align-items:center;justify-content:center;gap:10px;margin:18px 0 8px;font-size:14px;color:#cfdfeb;cursor:pointer}.remember-option input{appearance:auto;accent-color:#8df3d4;width:18px;height:18px;margin:0;padding:0;flex:none}.remember-note{font-size:12px;line-height:1.6;color:#a6b8c8;margin:0 0 20px}
 </style></head><body data-auth-required="true">
 <header><div><div class="eyebrow">HARDWARE / PLATFORM TIMELINE</div><h1>Platform-EVB-DVB lookup table</h1></div><div class="source-tools"><a class="badge" id="source-link" href="https://docs.google.com/spreadsheets/d/1oFVtQu56lc-JEa9Bm2r1nxS9EdvLRrWAcE9TzK9oNZI/edit" target="_blank" rel="noopener">Source · Google Sheets</a><button class="refresh" id="disconnect-google" hidden>Disconnect</button><button class="refresh" id="refresh-sheet">Refresh data</button></div></header>
 <section class="login-screen" id="login-screen" aria-labelledby="login-title">
@@ -22,6 +23,8 @@ main{min-width:0;padding:26px 30px}.summary{display:flex;align-items:center;gap:
     <h2 id="login-title">Sign in to view<br>EVB history</h2>
     <p class="login-description">Use your company Google account with access to the source spreadsheet.</p>
     <button class="login-button" id="connect-google" type="button">Sign in with Google</button>
+    <label class="remember-option"><input id="remember-google" type="checkbox" aria-describedby="remember-note">Remember me on this device</label>
+    <p class="remember-note" id="remember-note">Use on a device you trust. Stay signed in until your Google authorization expires, for up to one hour.</p>
     <p class="login-privacy">Read-only access · Your spreadsheet stays private.</p>
     <p class="login-status" id="login-status" role="status" aria-live="polite">Sign in to load your EVB timeline.</p>
     <a class="login-source" id="login-source" href="https://docs.google.com/spreadsheets/d/1oFVtQu56lc-JEa9Bm2r1nxS9EdvLRrWAcE9TzK9oNZI/edit" target="_blank" rel="noopener">Open source spreadsheet ↗</a>
@@ -158,7 +161,7 @@ list();draw();$('interaction-note').hidden=true;
   else root.EVBData = api;
 })(globalThis);
 </script>
-<script id="google-auth">/* Browser-only Google authorization. Tokens and sheet rows stay in memory. */
+<script id="google-auth">/* Browser-only Google authorization with optional short-lived session storage. */
 (function (root) {
   'use strict';
   const SCOPE = 'https://www.googleapis.com/auth/spreadsheets.readonly';
@@ -175,12 +178,64 @@ list();draw();$('interaction-note').hidden=true;
     const schedule = options.setTimeout || root.setTimeout.bind(root);
     const cancel = options.clearTimeout || root.clearTimeout.bind(root);
     let token = '', expiresAt = 0, timer, version = 0, controller;
+    const prefix = 'evb-auth:' + options.clientId + ':' + options.spreadsheetId;
+    const preferenceKey = prefix + ':remember', sessionKey = prefix + ':session';
+    function cache(method, key, value) {
+      try {
+        const storage = options.storage === undefined ? root.localStorage : options.storage;
+        if (!storage) return null;
+        if (method === 'getItem') return storage.getItem(key);
+        storage[method](key, value);
+        return true;
+      } catch { return null; }
+    }
+    let remembering = cache('getItem', preferenceKey) === 'true';
+    function persist() {
+      if (remembering && token && expiresAt > Date.now()) {
+        if (!cache('setItem', sessionKey, JSON.stringify({token, expiresAt}))) {
+          remembering = false;
+          cache('removeItem', preferenceKey);
+          cache('removeItem', sessionKey);
+        }
+      }
+    }
+    function setRemember(value) {
+      remembering = Boolean(value);
+      if (remembering && !cache('setItem', preferenceKey, 'true')) {
+        remembering = false;
+        options.onStatus('This browser cannot remember sign-in. You can still sign in for this visit.', 'saved');
+      }
+      if (remembering) persist();
+      else { cache('removeItem', preferenceKey); cache('removeItem', sessionKey); }
+      return remembering;
+    }
+    function expireAfter(delay) {
+      timer = schedule(() => clear('Google authorization expired. Sign in again to view data.'), delay);
+    }
     function clear(message) {
       version++;
       token = ''; expiresAt = 0;
       cancel(timer);
       controller?.abort();
+      cache('removeItem', sessionKey);
       options.onCleared(message);
+    }
+    function restore() {
+      if (!options.clientId || !remembering) { cache('removeItem', sessionKey); return false; }
+      let saved;
+      try { saved = JSON.parse(cache('getItem', sessionKey)); } catch { /* Discard invalid stored state. */ }
+      const remaining = saved?.expiresAt - Date.now();
+      if (!saved || typeof saved.token !== 'string' || !saved.token ||
+          !Number.isFinite(saved.expiresAt) || remaining <= 0 || remaining > 3600000) {
+        cache('removeItem', sessionKey);
+        return false;
+      }
+      version++;
+      token = saved.token; expiresAt = saved.expiresAt;
+      cancel(timer); expireAfter(remaining);
+      // onAuthorized reads Sheets again; saved state alone never reveals records.
+      options.onAuthorized();
+      return true;
     }
     function connect() {
       if (!options.clientId) {
@@ -209,8 +264,9 @@ list();draw();$('interaction-note').hidden=true;
               return;
             }
             token = response.access_token;
-            expiresAt = Date.now() + lifetime * 1000;
-            timer = schedule(() => clear('Google authorization expired. Sign in again to view data.'), lifetime * 1000);
+            const duration = Math.min(lifetime * 1000, 3600000);
+            expiresAt = Date.now() + duration;
+            persist(); expireAfter(duration);
             options.onAuthorized();
           },
           error_callback() {
@@ -285,7 +341,9 @@ list();draw();$('interaction-note').hidden=true;
         return {rows: [COLUMNS, ...rows], year: options.year, sheetName: tab.title, updatedAt: Date.now()};
       } finally { cancel(timeout); }
     }
-    return {connect, read, disconnect: () => clear('Disconnected. Sign in to view the private spreadsheet.'),
+    return {connect, read, restore, setRemember,
+      disconnect() { setRemember(false); clear('Disconnected. Sign in to view the private spreadsheet.'); },
+      get remembering() { return remembering; },
       get connected() { return Boolean(token) && Date.now() < expiresAt; }, get version() { return version; }};
   }
   const api = {createClient};
@@ -513,15 +571,23 @@ if (source.mode === 'google-oauth') {
     sheetName: config.sheetName || '', year: data.year,
     onCleared: clearLiveData, onStatus: updateStatus,
     onAuthorized() {
+      $('remember-google').checked = oauthClient.remembering;
       $('disconnect-google').hidden = false;
       if (activeRequest) refreshQueued = true; else refreshSheet();
     }
   });
+  $('remember-google').checked = oauthClient.remembering;
+  $('remember-google').addEventListener('change', event => {
+    $('remember-google').checked = oauthClient.setRemember(event.target.checked);
+  });
   $('connect-google').hidden = false;
   $('connect-google').addEventListener('click', event => {event.stopPropagation(); oauthClient.connect();});
-  $('disconnect-google').addEventListener('click', event => {event.stopPropagation(); oauthClient.disconnect();});
+  $('disconnect-google').addEventListener('click', event => {
+    event.stopPropagation(); oauthClient.disconnect(); $('remember-google').checked = false;
+  });
   clearLiveData(config.clientId ? 'Sign in with a Google account that can view the source spreadsheet.' :
     'Google sign-in has not been enabled for this website yet. Please contact the site administrator to finish setup.');
+  oauthClient.restore();
   setInterval(() => {if (!document.hidden && oauthClient.connected) refreshSheet();}, source.refreshSeconds * 1000);
 } else if (source.mode === 'apps-script') {
   refreshSheet();

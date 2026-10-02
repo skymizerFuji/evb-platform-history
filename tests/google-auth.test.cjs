@@ -6,7 +6,7 @@ const {createClient} = require('../chart/evb_google_auth.js');
 const EVBData = require('../chart/evb_data.js');
 const COLUMNS = ['#', 'Platform / Place', 'EVB / DVB', 'Change date', 'History'];
 
-function fixture({status = 200, fetch: customFetch} = {}) {
+function fixture({status = 200, fetch: customFetch, storage = null} = {}) {
   let auth, authorized = 0;
   const calls = [], cleared = [], timers = new Map();
   const data = [
@@ -15,7 +15,7 @@ function fixture({status = 200, fetch: customFetch} = {}) {
     {valueRanges: [ [[1],[2]], [['SW-A'],['SW-B']], [['DEMO'],['DEMO']], [['9/1'],['9/2']], [[false],[true]] ].map(values => ({values}))}
   ];
   const client = createClient({
-    clientId: 'example.apps.googleusercontent.com', spreadsheetId: 'test-sheet', year: 2026,
+    clientId: 'example.apps.googleusercontent.com', spreadsheetId: 'test-sheet', year: 2026, storage,
     identity: () => ({initTokenClient(config) {auth = config; return {requestAccessToken() {}};}, hasGrantedAllScopes: response => response.granted !== false}),
     fetch: customFetch || (async (url, options) => {calls.push({url, options}); return {ok:status === 200, status, json:async () => data[(calls.length - 1) % 3]};}),
     setTimeout: (callback, ms) => {const id = Symbol(); timers.set(id, {callback, ms}); return id;},
@@ -33,10 +33,80 @@ test('public website has no initial records, platform names, or pre-rendered tra
   assert.deepEqual(payload.platforms, []);
   assert.equal(payload.source.mode, 'google-oauth');
   assert.ok(!html.includes('class="evb-track"'));
-  assert.ok(!html.includes('localStorage'));
   assert.ok(!html.includes('sessionStorage'));
   assert.match(html, /<script id="public-config">globalThis.EVB_PUBLIC_CONFIG = /);
   assert.doesNotMatch(html, /src="\.\/config.js"/);
+});
+
+function memoryStorage() {
+  const values = new Map();
+  return {values, getItem:key=>values.get(key) ?? null,
+    setItem:(key,value)=>values.set(key,String(value)),removeItem:key=>values.delete(key)};
+}
+const savedSessionKey = 'evb-auth:example.apps.googleusercontent.com:test-sheet:session';
+
+test('remember is opt-in and restores an unexpired session without a Google popup', async () => {
+  const storage = memoryStorage();
+  const first = fixture({storage});
+  first.authorize();
+  assert.equal(storage.values.size,0,'No credentials are saved by default');
+  first.client.setRemember(true);
+  await first.client.read();
+  const saved = JSON.parse(storage.getItem(savedSessionKey));
+  assert.deepEqual(Object.keys(saved).sort(),['expiresAt','token'],'Sheet records are never persisted');
+  assert.equal(saved.token,'test-only-token');
+  const reopened = fixture({storage});
+  assert.equal(reopened.client.remembering,true);
+  assert.equal(reopened.client.restore(),true);
+  assert.equal(reopened.authorized,1,'Restoration triggers a fresh authorized Sheets read');
+  assert.equal(reopened.auth,undefined,'Restoration does not request a Google popup');
+  assert.equal(reopened.client.connected,true);
+  await reopened.client.read();
+  assert.equal(reopened.calls.length,3);
+});
+
+test('expired or invalid remembered sessions are removed', () => {
+  for (const saved of ['{invalid',JSON.stringify({token:'old',expiresAt:Date.now()-1}),
+    JSON.stringify({token:'old',expiresAt:Date.now()+7200000})]) {
+    const storage=memoryStorage(), first=fixture({storage});
+    first.client.setRemember(true);
+    storage.setItem(savedSessionKey,saved);
+    const reopened=fixture({storage});
+    assert.equal(reopened.client.restore(),false);
+    assert.equal(reopened.client.connected,false);
+    assert.equal(storage.getItem(savedSessionKey),null);
+  }
+});
+
+test('disconnect, expiry, and permission denial remove saved credentials', async () => {
+  for (const action of ['disconnect','expiry','denied']) {
+    const storage=memoryStorage(), f=fixture({storage,status:action==='denied'?403:200});
+    f.client.setRemember(true); f.authorize();
+    assert.ok(storage.getItem(savedSessionKey));
+    if (action==='disconnect') f.client.disconnect();
+    else if (action==='expiry') [...f.timers.values()].find(timer=>timer.ms===3600000).callback();
+    else await assert.rejects(f.client.read());
+    assert.equal(storage.getItem(savedSessionKey),null);
+    assert.equal(fixture({storage}).client.restore(),false);
+    if (action==='disconnect') assert.equal(storage.values.size,0,'Disconnect also forgets the preference');
+  }
+});
+
+test('forgetting a device keeps the current session but stops future restore', () => {
+  const storage=memoryStorage(), f=fixture({storage});
+  f.client.setRemember(true); f.authorize(); f.client.setRemember(false);
+  assert.equal(f.client.connected,true);
+  assert.equal(storage.values.size,0);
+  assert.equal(fixture({storage}).client.restore(),false);
+});
+
+test('blocked browser storage still permits normal sign-in', () => {
+  const storage={getItem(){throw Error('blocked')},setItem(){throw Error('blocked')},removeItem(){throw Error('blocked')}};
+  const f=fixture({storage});
+  assert.equal(f.client.setRemember(true),false);
+  assert.equal(f.client.restore(),false);
+  f.authorize();
+  assert.equal(f.client.connected,true);
 });
 
 test('no Google Sheets request is made without authorization', async () => {

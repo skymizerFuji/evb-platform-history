@@ -1,4 +1,4 @@
-/* Browser-only Google authorization. Tokens and sheet rows stay in memory. */
+/* Browser-only Google authorization with optional short-lived session storage. */
 (function (root) {
   'use strict';
   const SCOPE = 'https://www.googleapis.com/auth/spreadsheets.readonly';
@@ -15,12 +15,64 @@
     const schedule = options.setTimeout || root.setTimeout.bind(root);
     const cancel = options.clearTimeout || root.clearTimeout.bind(root);
     let token = '', expiresAt = 0, timer, version = 0, controller;
+    const prefix = 'evb-auth:' + options.clientId + ':' + options.spreadsheetId;
+    const preferenceKey = prefix + ':remember', sessionKey = prefix + ':session';
+    function cache(method, key, value) {
+      try {
+        const storage = options.storage === undefined ? root.localStorage : options.storage;
+        if (!storage) return null;
+        if (method === 'getItem') return storage.getItem(key);
+        storage[method](key, value);
+        return true;
+      } catch { return null; }
+    }
+    let remembering = cache('getItem', preferenceKey) === 'true';
+    function persist() {
+      if (remembering && token && expiresAt > Date.now()) {
+        if (!cache('setItem', sessionKey, JSON.stringify({token, expiresAt}))) {
+          remembering = false;
+          cache('removeItem', preferenceKey);
+          cache('removeItem', sessionKey);
+        }
+      }
+    }
+    function setRemember(value) {
+      remembering = Boolean(value);
+      if (remembering && !cache('setItem', preferenceKey, 'true')) {
+        remembering = false;
+        options.onStatus('This browser cannot remember sign-in. You can still sign in for this visit.', 'saved');
+      }
+      if (remembering) persist();
+      else { cache('removeItem', preferenceKey); cache('removeItem', sessionKey); }
+      return remembering;
+    }
+    function expireAfter(delay) {
+      timer = schedule(() => clear('Google authorization expired. Sign in again to view data.'), delay);
+    }
     function clear(message) {
       version++;
       token = ''; expiresAt = 0;
       cancel(timer);
       controller?.abort();
+      cache('removeItem', sessionKey);
       options.onCleared(message);
+    }
+    function restore() {
+      if (!options.clientId || !remembering) { cache('removeItem', sessionKey); return false; }
+      let saved;
+      try { saved = JSON.parse(cache('getItem', sessionKey)); } catch { /* Discard invalid stored state. */ }
+      const remaining = saved?.expiresAt - Date.now();
+      if (!saved || typeof saved.token !== 'string' || !saved.token ||
+          !Number.isFinite(saved.expiresAt) || remaining <= 0 || remaining > 3600000) {
+        cache('removeItem', sessionKey);
+        return false;
+      }
+      version++;
+      token = saved.token; expiresAt = saved.expiresAt;
+      cancel(timer); expireAfter(remaining);
+      // onAuthorized reads Sheets again; saved state alone never reveals records.
+      options.onAuthorized();
+      return true;
     }
     function connect() {
       if (!options.clientId) {
@@ -49,8 +101,9 @@
               return;
             }
             token = response.access_token;
-            expiresAt = Date.now() + lifetime * 1000;
-            timer = schedule(() => clear('Google authorization expired. Sign in again to view data.'), lifetime * 1000);
+            const duration = Math.min(lifetime * 1000, 3600000);
+            expiresAt = Date.now() + duration;
+            persist(); expireAfter(duration);
             options.onAuthorized();
           },
           error_callback() {
@@ -125,7 +178,9 @@
         return {rows: [COLUMNS, ...rows], year: options.year, sheetName: tab.title, updatedAt: Date.now()};
       } finally { cancel(timeout); }
     }
-    return {connect, read, disconnect: () => clear('Disconnected. Sign in to view the private spreadsheet.'),
+    return {connect, read, restore, setRemember,
+      disconnect() { setRemember(false); clear('Disconnected. Sign in to view the private spreadsheet.'); },
+      get remembering() { return remembering; },
       get connected() { return Boolean(token) && Date.now() < expiresAt; }, get version() { return version; }};
   }
   const api = {createClient};
