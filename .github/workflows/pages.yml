@@ -31,6 +31,7 @@ jobs:
           mkdir -p _site
           cp public/evb.html _site/index.html
           cp public/config.js _site/config.js
+          cp public/favicon.png _site/favicon.png
           touch _site/.nojekyll
       - name: Upload website
         uses: actions/upload-pages-artifact@v4
