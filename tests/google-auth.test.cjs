@@ -182,6 +182,7 @@ for (const configured of [false, true]) test(`public page boots with ${configure
     replaceChildren(...nodes) {this.children=nodes;}
     get childNodes() {return this.children;}
     addEventListener(key,callback) {this.events[key]=callback;}
+    focus() {this.focused=true;}
     querySelectorAll() {return this.children.filter(node => node.attrs.class === 'evb-track');}
   }
   const elements = new Map();
@@ -356,6 +357,39 @@ for (const configured of [false, true]) test(`public page boots with ${configure
   assert.deepEqual(labeledIDs(),[],'Blank page space removes all labels');
   assert.deepEqual(brightBoards(),boards(),'Blank page space restores all board brightness');
   assert.equal(bright().length,3);
+  const platformEvent = (name, key) => {
+    const tick=boardTicks().find(node=>node.attrs['data-platform']===name);
+    assert.equal(tick.attrs.role,'button');
+    assert.equal(tick.attrs.tabindex,'0');
+    let stopped=false,prevented=false;
+    const event={key,target:{closest:selector=>selector==='[data-platform]'?tick:null},stopPropagation(){stopped=true;},preventDefault(){prevented=true;}};
+    element('chart').events[key?'keydown':'click'](event);
+    assert.ok(stopped,'Platform activation must not bubble into blank-space clearing');
+    if(key) {
+      assert.ok(prevented,'Keyboard activation prevents page scrolling');
+      assert.ok(boardTicks().find(node=>node.attrs['data-platform']===name).focused,'Keyboard focus survives chart redraw');
+    }
+  };
+  choose('DEMO-C');
+  platformEvent('BOARD-C');
+  assert.deepEqual(bright(),['DEMO-B','DEMO-EVB'],'Platform click replaces selection with every EVB that has visited it');
+  assert.ok(run('selected.has("DEMO-B")'),'EVBs that later moved to another board are included');
+  assert.deepEqual(labeledIDs(),['DEMO-B','DEMO-EVB']);
+  assert.deepEqual(boardTicks().map(node=>node.attrs.y),allBoardPositions);
+  platformEvent('BOARD-C');
+  assert.deepEqual(bright(),['DEMO-B','DEMO-EVB'],'Repeated platform clicks keep all matching EVBs selected');
+  clickLine('DEMO-B');
+  assert.deepEqual(bright(),['DEMO-EVB'],'Individual lines can still be removed from a platform selection');
+  platformEvent('BOARD-B','Enter');
+  assert.deepEqual(bright(),['DEMO-C'],'A dimmed platform is still selectable using the keyboard');
+  platformEvent('BOARD-C',' ');
+  assert.deepEqual(bright(),['DEMO-B','DEMO-EVB']);
+  run('applyData({...data,records:[...data.records]})');
+  assert.deepEqual(bright(),['DEMO-B','DEMO-EVB'],'Refresh preserves the selected group');
+  documentEvents.click({target:{closest:()=>null}});
+  assert.equal(run('selected.size'),0);
+  assert.equal(bright().length,3);
+  assert.deepEqual(labeledIDs(),[]);
   run('applyData({...data,platforms:["SHARED-BOARD"],records:[{evb:"LABEL-A",platform:"SHARED-BOARD",date:"2026-09-01",number:1},{evb:"LABEL-B",platform:"SHARED-BOARD",date:"2026-09-01",number:2}]});select(["LABEL-A","LABEL-B"])');
   assert.deepEqual(labeledIDs(),['LABEL-A','LABEL-B'],'Single-date lines can be labeled');
   assert.ok(Math.abs(Number(labels()[0].attrs.y)-Number(labels()[1].attrs.y))>=18,'Nearby labels avoid overlapping');

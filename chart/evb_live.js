@@ -55,7 +55,9 @@ function makeChart(next, requestedWidth) {
       (i - (members.length - 1) / 2) * Math.min(5, 27 / Math.max(1, members.length - 1))));
     const opacity = !selected.size || usedPlatforms.has(platform) ? 1 : .3;
     if (level % 2 === 0) svg.append(svgNode('rect', {x: left, y: top + level * rowHeight, width: width-left-right, height: rowHeight, fill: '#182538', opacity}));
-    svg.append(svgNode('text', {class: 'platform-tick', 'data-platform': platform, x: left-14, y: top+(level+.5)*rowHeight+4, 'text-anchor': 'end', fill: '#bdcbdd', opacity}, platform));
+    svg.append(svgNode('text', {class: 'platform-tick', 'data-platform': platform, role:'button', tabindex:0,
+      'aria-label':`Select all EVBs with history on ${platform}`, x: left-14, y: top+(level+.5)*rowHeight+4,
+      'text-anchor': 'end', fill: '#bdcbdd', opacity}, platform));
   });
   const sameYear = dateSpacing(dates) === 64;
   const focusedDates = new Set(visibleRecords.map(record => record.date));

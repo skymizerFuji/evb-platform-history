@@ -16,6 +16,7 @@ main{min-width:0;padding:26px 30px}.summary{display:flex;align-items:center;gap:
 .login-screen[hidden]{display:none}.login-screen{padding:48px 24px}.login-card{width:min(100%,520px);text-align:center;padding:48px 40px 36px;background:#131e2d;border:1px solid #33485b;border-radius:22px;box-shadow:0 24px 80px #0005}.login-label{display:inline-block;padding:8px 12px;border:1px solid #2e6256;border-radius:100px;color:#8df3d4;background:#15372f;font-size:11px;font-weight:650;letter-spacing:.12em}.login-card h2{margin:24px 0 16px;font-size:clamp(28px,4vw,38px);line-height:1.2;letter-spacing:-.035em}.login-description{font-size:16px;line-height:1.75;color:#b4c4d5;margin:0 0 28px}.login-button{display:block;width:100%;min-height:60px;padding:16px 20px;border:1px solid #8df3d4;border-radius:12px;background:#8df3d4;color:#092b23;font-size:18px;font-weight:700;box-shadow:0 4px 20px #6ee7cc18;transition:background .15s}.login-button:hover{background:#b6ffe9}.login-button:disabled{opacity:.65;cursor:not-allowed}.login-privacy{font-size:12px;color:#a6b8c8;margin:16px 0 22px;line-height:1.7}.login-status{font-size:13px;line-height:1.7;color:#b9cadb;overflow-wrap:anywhere;margin:0 0 18px}.login-status[data-state=error]{color:#f3cf8c;background:#352c1b;border:1px solid #6b5530;border-radius:10px;padding:14px 16px}.login-source{color:#89e8ca;font-size:13px;text-underline-offset:4px}body[data-auth-required=true]{display:flex;flex-direction:column;min-height:100vh;min-height:100svh}body[data-auth-required=true] .workspace,body[data-auth-required=true] header .source-tools{display:none}body[data-auth-required=true] .login-screen{display:grid;flex:1;place-items:center;background:radial-gradient(ellipse at center,#17302d70 0,transparent 65%)}@media(max-width:620px){.login-screen{padding:24px 16px}.login-card{padding:32px 24px 26px;border-radius:18px}.login-card h2{font-size:29px}.login-description{font-size:15px}.login-button{min-height:58px}body[data-auth-required=true] header h1{font-size:20px}}
 .remember-option{display:flex;align-items:center;justify-content:center;gap:10px;margin:18px 0 8px;font-size:14px;color:#cfdfeb;cursor:pointer}.remember-option input{appearance:auto;accent-color:#8df3d4;width:18px;height:18px;margin:0;padding:0;flex:none}.remember-note{font-size:12px;line-height:1.6;color:#a6b8c8;margin:0 0 20px}
 .aside-hint{font-size:12px;color:#a2b1c4;line-height:1.6;margin:0 4px 14px}.evb-button::before{content:"";display:grid;place-items:center;flex:none;width:16px;height:16px;border:1px solid #60758b;border-radius:4px;font-size:12px;line-height:1}.evb-button[aria-pressed=true]::before{content:"✓";background:#8df3d4;border-color:#8df3d4;color:#092b23}
+.platform-tick{cursor:pointer;pointer-events:bounding-box}.platform-tick:hover,.platform-tick:focus-visible{fill:#8df3d4;opacity:1;text-decoration:underline}.platform-tick:focus-visible{outline:2px solid #45b7aa;outline-offset:4px}
 </style></head><body>
 <header><div><div class="eyebrow">HARDWARE / PLATFORM TIMELINE</div><h1>Platform-EVB-DVB lookup table</h1></div><div class="source-tools"><a class="badge" id="source-link" href="https://docs.google.com/spreadsheets/d/1oFVtQu56lc-JEa9Bm2r1nxS9EdvLRrWAcE9TzK9oNZI/edit" target="_blank" rel="noopener">Source · Google Sheets</a><button class="refresh" id="disconnect-google" hidden>Disconnect</button><button class="refresh" id="refresh-sheet">Refresh data</button></div></header>
 <section class="login-screen" id="login-screen" aria-labelledby="login-title" hidden>
@@ -32,7 +33,7 @@ main{min-width:0;padding:26px 30px}.summary{display:flex;align-items:center;gap:
     <noscript><p class="login-status">Enable JavaScript to sign in and view the timeline.</p></noscript>
   </div>
 </section>
-<div class="workspace"><aside aria-label="Select one or more EVBs"><div class="aside-title">EVB list <span class="count" id="list-count"></span></div><p class="aside-hint">Select multiple devices. Click blank space to clear.</p><input id="search" type="search" placeholder="Search EVB ID…" aria-label="Search EVB ID"><button class="all" id="show-all" aria-pressed="true">Show all EVBs</button><div class="evb-list" id="evb-list"></div></aside><main>
+<div class="workspace"><aside aria-label="Select one or more EVBs"><div class="aside-title">EVB list <span class="count" id="list-count"></span></div><p class="aside-hint">Select multiple devices, or click a platform name to select its EVBs. Click blank space to clear.</p><input id="search" type="search" placeholder="Search EVB ID…" aria-label="Search EVB ID"><button class="all" id="show-all" aria-pressed="true">Show all EVBs</button><div class="evb-list" id="evb-list"></div></aside><main>
 <p class="sync-status" id="sync-status" role="status" aria-live="polite">Checking data source…</p><div class="summary"><div class="metric"><strong id="evb-count"></strong><span>EVBs</span></div><div class="metric"><strong id="platform-count"></strong><span>Platforms</span></div><div class="metric"><strong id="record-count"></strong><span>Records</span></div><div class="period" id="period"></div></div>
 <section class="panel" aria-labelledby="chart-title"><div class="chart-heading"><div><h2 id="chart-title">All EVB platform histories</h2><p class="hint" id="chart-hint">Select one or more EVBs from the list or click lines to compare their histories.</p></div><span class="selection" id="selection" aria-live="polite">Showing all</span></div><p class="interaction-note" id="interaction-note">The chart is available below. If the EVB list is missing, enable JavaScript to use filtering.</p><div class="timeline-controls" id="timeline-controls" role="group" aria-label="Time axis zoom" hidden><label for="zoom-range">Time zoom</label><button id="zoom-out" type="button" aria-label="Zoom out time axis">−</button><input id="zoom-range" type="range" min="100" max="800" step="1" value="100" aria-controls="chart"><button id="zoom-in" type="button" aria-label="Zoom in time axis">+</button><output id="zoom-value" for="zoom-range">100%</output><button id="zoom-fit" type="button">Reset zoom</button></div><p class="timeline-hint" id="timeline-hint">Recorded dates are equally spaced · Zoom with the slider or Ctrl / ⌘ + scroll · Scroll horizontally to see every date.</p><div id="timeline-scroll" class="chart-scroll" tabindex="0" role="region" aria-label="Scrollable timeline" aria-describedby="timeline-hint">__EVB_CHART__</div><div class="chart-note"><b>● Recorded date</b>　Lines continue until the next change or the end of the date range. Lines on the same platform are slightly offset for clarity.</div></section>
 <section class="panel detail" aria-labelledby="detail-title"><div class="detail-head"><h2 id="detail-title">EVB details</h2><span id="detail-meta"></span></div><div id="detail-content"><p class="instructions">Select one or more EVBs to see their dates, platforms, and record numbers.</p></div></section>
@@ -91,6 +92,9 @@ function toggle(evb){
   if(selected.has(evb))selected.delete(evb);else if(histories.has(evb))selected.add(evb);
   updateSelection();
 }
+function selectPlatform(platform){
+  select(evbs.filter(evb=>histories.get(evb).some(record=>record.platform===platform)));
+}
 function updateSelection(redraw=true){
   const count=selected.size,first=[...selected][0];
   $('chart-hint').textContent=count?'Selected lines and their boards are highlighted. Click a dimmed line to add it, click again to deselect, or click blank space to clear.':'Select one or more EVBs from the list or click lines to compare their histories.';
@@ -140,8 +144,19 @@ function draw(){
 }
 chart.addEventListener('click',event=>{
   const track=event.target.closest('[data-evb]');
+  const platform=event.target.closest('[data-platform]');
   if(track){event.stopPropagation();toggle(track.getAttribute('data-evb'))}
+  else if(platform){event.stopPropagation();selectPlatform(platform.getAttribute('data-platform'))}
   else if(selected.size)select(null);
+});
+chart.addEventListener('keydown',event=>{
+  if(event.key!=='Enter' && event.key!==' ')return;
+  const platform=event.target.closest('[data-platform]');
+  if(!platform)return;
+  event.preventDefault();event.stopPropagation();
+  const name=platform.getAttribute('data-platform');
+  selectPlatform(name);
+  Array.from(chart.children).find(node=>node.getAttribute('data-platform')===name)?.focus({preventScroll:true});
 });
 document.addEventListener('click',event=>{
   if(selected.size && !event.target.closest('button, a, input, textarea, select, label, [contenteditable], .table-scroll, .chart-scroll, .timeline-controls'))select(null);
