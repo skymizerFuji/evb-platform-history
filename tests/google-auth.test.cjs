@@ -189,8 +189,9 @@ for (const configured of [false, true]) test(`public page boots with ${configure
   element('evb-data').textContent = html.match(/id="evb-data" type="application\/json">([\s\S]*?)<\/script>/)[1];
   element('chart').setAttribute('width',1100);
   let requestedClient, popupRequests = 0;
+  const documentEvents = {};
   const context = vm.createContext({
-    document:{body:new Element(),getElementById:element,createElement:()=>new Element(),createElementNS:()=>new Element(),addEventListener(){}},
+    document:{body:new Element(),getElementById:element,createElement:()=>new Element(),createElementNS:()=>new Element(),addEventListener(name,callback){documentEvents[name]=callback;}},
     ResizeObserver:class{observe(){}}, setTimeout(){}, clearTimeout(){}, setInterval(){},
     AbortController, URL,
     google:{accounts:{oauth2:{initTokenClient(options) {
@@ -224,10 +225,46 @@ for (const configured of [false, true]) test(`public page boots with ${configure
   assert.equal(run('document.body.getAttribute("data-auth-required")'),'false');
   assert.equal(element('login-screen').hidden,true);
   assert.match(element('detail-title').textContent,/DEMO-EVB/);
+  run('applyData({...data,records:[...data.records,{evb:"DEMO-B",platform:"DEMO-PLATFORM",date:"2026-09-03",number:2,history:false},{evb:"DEMO-C",platform:"DEMO-PLATFORM",date:"2026-09-05",number:3,history:false}]})');
+  const choose = id => element('evb-list').children.find(button => button.attrs['data-evb-choice'] === id).events.click({stopPropagation(){}});
+  const visible = () => element('chart').querySelectorAll().filter(track => track.style.display !== 'none').map(track => track.attrs['data-evb']).sort();
+  const dates = () => element('chart').children.filter(node => node.attrs.class === 'date-tick').map(node => node.attrs['data-date']).sort();
+  choose('DEMO-B');
+  assert.equal(run('selected.size'),2);
+  assert.deepEqual(visible(),['DEMO-B','DEMO-EVB']);
+  assert.deepEqual(dates(),['2026-09-01','2026-09-03']);
+  assert.equal(element('selection').textContent,'2 selected');
+  const table = element('detail-content').children[0].children[0];
+  assert.equal(table.children[0].children[0].children[0].textContent,'EVB');
+  assert.equal(table.children[1].children.length,2);
+  element('search').value='DEMO-C';
+  element('search').events.input();
+  choose('DEMO-C');
+  assert.equal(run('selected.size'),3,'Filtering the list preserves other selections');
+  element('search').value='';
+  element('search').events.input();
+  choose('DEMO-C');
+  assert.deepEqual(visible(),['DEMO-B','DEMO-EVB'],'Click again deselects just that device');
+  run('zoomTimeline(2);applyData({...data,records:[...data.records]})');
+  assert.equal(run('selected.size'),2,'Refresh retains multiple selections');
+  assert.equal(run('timelineZoom'),2);
+  assert.deepEqual(dates(),['2026-09-01','2026-09-03']);
+  documentEvents.click({target:{closest:()=>element('search')}});
+  assert.equal(run('selected.size'),2,'Controls do not clear selection');
+  documentEvents.click({target:{closest:()=>null}});
+  assert.equal(run('selected.size'),0,'Blank page space clears every selection');
+  assert.equal(visible().length,3);
+  choose('DEMO-B');choose('DEMO-C');
+  element('chart').events.click({target:{closest:()=>null}});
+  assert.equal(run('selected.size'),0,'Blank chart space clears every selection');
+  assert.equal(visible().length,3);
+  choose('DEMO-B');choose('DEMO-C');
+  run('applyData({...data,records:data.records.filter(record=>record.evb!=="DEMO-B")})');
+  assert.deepEqual(visible(),['DEMO-C'],'Refresh drops removed devices and retains remaining selections');
   element('disconnect-google').events.click({stopPropagation(){}});
   assert.equal(run('data.records.length'),0);
   assert.equal(run('histories.size'),0);
-  assert.equal(run('selected'),null);
+  assert.equal(run('selected.size'),0);
   assert.equal(run('document.body.getAttribute("data-auth-required")'),'true');
   assert.equal(element('login-screen').hidden,false);
   assert.equal(element('chart').querySelectorAll().length,0);

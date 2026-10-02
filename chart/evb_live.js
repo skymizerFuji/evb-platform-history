@@ -39,7 +39,7 @@ function makeChart(next, requestedWidth) {
     if (level % 2 === 0) svg.append(svgNode('rect', {x: left, y: top + level * rowHeight, width: width-left-right, height: rowHeight, fill: '#182538'}));
     svg.append(svgNode('text', {x: left-14, y: top+(level+.5)*rowHeight+4, 'text-anchor': 'end', fill: '#bdcbdd'}, platform));
   });
-  const focusedRecords = selected ? next.records.filter(record => record.evb === selected) : null;
+  const focusedRecords = selected.size ? next.records.filter(record => selected.has(record.evb)) : null;
   const ticks = focusedRecords
     ? new Set(focusedRecords.map(record => Math.round((day(record.date) - first) / 86400000)))
     : new Set([0, span]);
@@ -135,10 +135,11 @@ function applyData(next) {
   const anchorDate = timelineAnchor();
   data = {...next, source};
   rebuildIndex();
+  selected = new Set([...selected].filter(evb => histories.has(evb)));
   showLogin(false);
   renderTimeline(anchorDate);
   updateSummary();
-  select(selected && histories.has(selected) ? selected : null);
+  updateSelection(false);
 }
 function updateStatus(message, state) {
   $('sync-status').textContent = message;

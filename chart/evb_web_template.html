@@ -15,6 +15,7 @@ main{min-width:0;padding:26px 30px}.summary{display:flex;align-items:center;gap:
 .timeline-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 24px 8px;font-size:12px}.timeline-controls[hidden]{display:none}.timeline-controls button{border:1px solid #3b556b;border-radius:6px;background:#1b3041;padding:7px 11px;min-height:36px}.timeline-controls button:disabled{opacity:.4;cursor:default}.timeline-controls input[type=range]{appearance:auto;accent-color:#6ee7cc;width:clamp(100px,20vw,240px);padding:0;border:0;background:transparent;min-height:36px}.timeline-controls output{font-variant-numeric:tabular-nums;min-width:42px;color:#8df3d4}
 .login-screen[hidden]{display:none}.login-screen{padding:48px 24px}.login-card{width:min(100%,520px);text-align:center;padding:48px 40px 36px;background:#131e2d;border:1px solid #33485b;border-radius:22px;box-shadow:0 24px 80px #0005}.login-label{display:inline-block;padding:8px 12px;border:1px solid #2e6256;border-radius:100px;color:#8df3d4;background:#15372f;font-size:11px;font-weight:650;letter-spacing:.12em}.login-card h2{margin:24px 0 16px;font-size:clamp(28px,4vw,38px);line-height:1.2;letter-spacing:-.035em}.login-description{font-size:16px;line-height:1.75;color:#b4c4d5;margin:0 0 28px}.login-button{display:block;width:100%;min-height:60px;padding:16px 20px;border:1px solid #8df3d4;border-radius:12px;background:#8df3d4;color:#092b23;font-size:18px;font-weight:700;box-shadow:0 4px 20px #6ee7cc18;transition:background .15s}.login-button:hover{background:#b6ffe9}.login-button:disabled{opacity:.65;cursor:not-allowed}.login-privacy{font-size:12px;color:#a6b8c8;margin:16px 0 22px;line-height:1.7}.login-status{font-size:13px;line-height:1.7;color:#b9cadb;overflow-wrap:anywhere;margin:0 0 18px}.login-status[data-state=error]{color:#f3cf8c;background:#352c1b;border:1px solid #6b5530;border-radius:10px;padding:14px 16px}.login-source{color:#89e8ca;font-size:13px;text-underline-offset:4px}body[data-auth-required=true]{display:flex;flex-direction:column;min-height:100vh;min-height:100svh}body[data-auth-required=true] .workspace,body[data-auth-required=true] header .source-tools{display:none}body[data-auth-required=true] .login-screen{display:grid;flex:1;place-items:center;background:radial-gradient(ellipse at center,#17302d70 0,transparent 65%)}@media(max-width:620px){.login-screen{padding:24px 16px}.login-card{padding:32px 24px 26px;border-radius:18px}.login-card h2{font-size:29px}.login-description{font-size:15px}.login-button{min-height:58px}body[data-auth-required=true] header h1{font-size:20px}}
 .remember-option{display:flex;align-items:center;justify-content:center;gap:10px;margin:18px 0 8px;font-size:14px;color:#cfdfeb;cursor:pointer}.remember-option input{appearance:auto;accent-color:#8df3d4;width:18px;height:18px;margin:0;padding:0;flex:none}.remember-note{font-size:12px;line-height:1.6;color:#a6b8c8;margin:0 0 20px}
+.aside-hint{font-size:12px;color:#a2b1c4;line-height:1.6;margin:0 4px 14px}.evb-button::before{content:"";display:grid;place-items:center;flex:none;width:16px;height:16px;border:1px solid #60758b;border-radius:4px;font-size:12px;line-height:1}.evb-button[aria-pressed=true]::before{content:"✓";background:#8df3d4;border-color:#8df3d4;color:#092b23}
 </style></head><body>
 <header><div><div class="eyebrow">HARDWARE / PLATFORM TIMELINE</div><h1>Platform-EVB-DVB lookup table</h1></div><div class="source-tools"><a class="badge" id="source-link" href="https://docs.google.com/spreadsheets/d/1oFVtQu56lc-JEa9Bm2r1nxS9EdvLRrWAcE9TzK9oNZI/edit" target="_blank" rel="noopener">Source · Google Sheets</a><button class="refresh" id="disconnect-google" hidden>Disconnect</button><button class="refresh" id="refresh-sheet">Refresh data</button></div></header>
 <section class="login-screen" id="login-screen" aria-labelledby="login-title" hidden>
@@ -31,10 +32,10 @@ main{min-width:0;padding:26px 30px}.summary{display:flex;align-items:center;gap:
     <noscript><p class="login-status">Enable JavaScript to sign in and view the timeline.</p></noscript>
   </div>
 </section>
-<div class="workspace"><aside aria-label="Select an EVB"><div class="aside-title">EVB list <span class="count" id="list-count"></span></div><input id="search" type="search" placeholder="Search EVB ID…" aria-label="Search EVB ID"><button class="all" id="show-all" aria-pressed="true">Show all EVBs</button><div class="evb-list" id="evb-list"></div></aside><main>
+<div class="workspace"><aside aria-label="Select one or more EVBs"><div class="aside-title">EVB list <span class="count" id="list-count"></span></div><p class="aside-hint">Select multiple devices. Click blank space to clear.</p><input id="search" type="search" placeholder="Search EVB ID…" aria-label="Search EVB ID"><button class="all" id="show-all" aria-pressed="true">Show all EVBs</button><div class="evb-list" id="evb-list"></div></aside><main>
 <p class="sync-status" id="sync-status" role="status" aria-live="polite">Checking data source…</p><div class="summary"><div class="metric"><strong id="evb-count"></strong><span>EVBs</span></div><div class="metric"><strong id="platform-count"></strong><span>Platforms</span></div><div class="metric"><strong id="record-count"></strong><span>Records</span></div><div class="period" id="period"></div></div>
-<section class="panel" aria-labelledby="chart-title"><div class="chart-heading"><div><h2 id="chart-title">All EVB platform histories</h2><p class="hint" id="chart-hint">Select an EVB from the list or click a line to view it on its own.</p></div><span class="selection" id="selection" aria-live="polite">Showing all</span></div><p class="interaction-note" id="interaction-note">The chart is available below. If the EVB list is missing, enable JavaScript to use filtering.</p><div class="timeline-controls" id="timeline-controls" role="group" aria-label="Time axis zoom" hidden><label for="zoom-range">Time zoom</label><button id="zoom-out" type="button" aria-label="Zoom out time axis">−</button><input id="zoom-range" type="range" min="100" max="800" step="1" value="100" aria-controls="chart"><button id="zoom-in" type="button" aria-label="Zoom in time axis">+</button><output id="zoom-value" for="zoom-range">100%</output><button id="zoom-fit" type="button">Fit all dates</button></div><p class="timeline-hint" id="timeline-hint">Zoom with the slider or Ctrl / ⌘ + scroll · Drag the scrollbar or swipe to browse dates.</p><div id="timeline-scroll" class="chart-scroll" tabindex="0" role="region" aria-label="Scrollable timeline" aria-describedby="timeline-hint">__EVB_CHART__</div><div class="chart-note"><b>● Recorded date</b>　Lines continue until the next change or the end of the date range. Lines on the same platform are slightly offset for clarity.</div></section>
-<section class="panel detail" aria-labelledby="detail-title"><div class="detail-head"><h2 id="detail-title">EVB details</h2><span id="detail-meta"></span></div><div id="detail-content"><p class="instructions">Select an EVB to see its dates, platforms, and record numbers.</p></div></section>
+<section class="panel" aria-labelledby="chart-title"><div class="chart-heading"><div><h2 id="chart-title">All EVB platform histories</h2><p class="hint" id="chart-hint">Select one or more EVBs from the list or click lines to compare their histories.</p></div><span class="selection" id="selection" aria-live="polite">Showing all</span></div><p class="interaction-note" id="interaction-note">The chart is available below. If the EVB list is missing, enable JavaScript to use filtering.</p><div class="timeline-controls" id="timeline-controls" role="group" aria-label="Time axis zoom" hidden><label for="zoom-range">Time zoom</label><button id="zoom-out" type="button" aria-label="Zoom out time axis">−</button><input id="zoom-range" type="range" min="100" max="800" step="1" value="100" aria-controls="chart"><button id="zoom-in" type="button" aria-label="Zoom in time axis">+</button><output id="zoom-value" for="zoom-range">100%</output><button id="zoom-fit" type="button">Fit all dates</button></div><p class="timeline-hint" id="timeline-hint">Zoom with the slider or Ctrl / ⌘ + scroll · Drag the scrollbar or swipe to browse dates.</p><div id="timeline-scroll" class="chart-scroll" tabindex="0" role="region" aria-label="Scrollable timeline" aria-describedby="timeline-hint">__EVB_CHART__</div><div class="chart-note"><b>● Recorded date</b>　Lines continue until the next change or the end of the date range. Lines on the same platform are slightly offset for clarity.</div></section>
+<section class="panel detail" aria-labelledby="detail-title"><div class="detail-head"><h2 id="detail-title">EVB details</h2><span id="detail-meta"></span></div><div id="detail-content"><p class="instructions">Select one or more EVBs to see their dates, platforms, and record numbers.</p></div></section>
 <footer>For the same EVB and date, the highest # takes precedence. Ties favor records with History unchecked. Year: <span id="year"></span>.</footer></main></div><div class="tooltip" id="tooltip" hidden></div>
 <script id="evb-data" type="application/json">__EVB_DATA__</script>
 <script>
@@ -43,7 +44,7 @@ let data=JSON.parse(document.getElementById('evb-data').textContent);
 const $=id=>document.getElementById(id);
 const day=value=>Date.parse(value+'T00:00:00Z');
 let evbs=[],histories=new Map(),colors=new Map(),start,end;
-let selected=null;
+let selected=new Set();
 const chart=$('chart'),tooltip=$('tooltip');
 function rebuildIndex(){
   evbs=[...new Set(data.records.map(r=>r.evb))].sort((a,b)=>a.localeCompare(b,'en',{numeric:true}));
@@ -58,28 +59,90 @@ function updateSummary(){
 }
 rebuildIndex();updateSummary();
 function recordCount(count){return count+' record'+(count===1?'':'s')}
-function list(){const query=$('search').value.trim().toLowerCase();const matches=evbs.filter(e=>e.toLowerCase().includes(query));$('list-count').textContent=matches.length+' / '+evbs.length;$('evb-list').replaceChildren();matches.forEach(evb=>{const button=document.createElement('button');button.className='evb-button';button.setAttribute('aria-pressed',String(selected===evb));button.setAttribute('aria-label','Show only EVB '+evb);const swatch=document.createElement('span');swatch.className='swatch';swatch.style.background=colors.get(evb);const name=document.createElement('span');name.textContent=evb;const count=document.createElement('small');count.textContent=recordCount(histories.get(evb).length);button.append(swatch,name,count);button.addEventListener('click',event=>{event.stopPropagation();select(selected===evb?null:evb)});$('evb-list').append(button)});if(!matches.length){const message=document.createElement('p');message.className='empty';message.textContent='No matching EVBs';$('evb-list').append(message)}}
-function select(evb){selected=evb;$('chart-hint').textContent=evb?'Only this EVB’s recorded dates are shown. Click anywhere to show all lines again, or select another EVB to switch.':'Select an EVB from the list or click a line to view it on its own.';tooltip.hidden=true;$('show-all').setAttribute('aria-pressed',String(!evb));$('selection').textContent=evb?'EVB '+evb:'Showing all';$('chart-title').textContent=evb?'EVB '+evb+' platform history':'All EVB platform histories';list();detail();if(typeof renderTimeline==='function'){renderTimeline(timelineAnchor())}else{draw()}}
-function detail(){const content=$('detail-content');content.replaceChildren();if(!selected){$('detail-title').textContent='EVB details';$('detail-meta').textContent='';const p=document.createElement('p');p.className='instructions';p.textContent='Select an EVB to see its dates, platforms, and record numbers.';content.append(p);return}const records=histories.get(selected);$('detail-title').textContent=selected+' · Platform history';$('detail-meta').textContent=recordCount(records.length)+' · Last platform: '+records[records.length-1].platform;const scroll=document.createElement('div');scroll.className='table-scroll';const table=document.createElement('table');const head=document.createElement('thead');const row=document.createElement('tr');['Date','Platform / Place','Record #','History'].forEach(label=>{const th=document.createElement('th');th.scope='col';th.textContent=label;row.append(th)});head.append(row);table.append(head);const body=document.createElement('tbody');records.forEach(record=>{const tr=document.createElement('tr');[record.date,record.platform,'#'+record.number,record.history?'Checked':'Unchecked'].forEach((text,i)=>{const td=document.createElement('td');if(i===3){const tag=document.createElement('span');tag.className=record.history?'history':'status';tag.textContent=text;td.append(tag)}else td.textContent=text;tr.append(td)});body.append(tr)});table.append(body);scroll.append(table);content.append(scroll)}
+function list(){
+  const query=$('search').value.trim().toLowerCase();
+  const matches=evbs.filter(e=>e.toLowerCase().includes(query));
+  const focused=document.activeElement?.getAttribute('data-evb-choice');
+  const scrollTop=$('evb-list').scrollTop,scrollLeft=$('evb-list').scrollLeft;
+  $('list-count').textContent=matches.length+' / '+evbs.length;
+  $('evb-list').replaceChildren();
+  matches.forEach(evb=>{
+    const button=document.createElement('button');
+    button.className='evb-button';
+    button.setAttribute('aria-pressed',String(selected.has(evb)));
+    button.setAttribute('aria-label','EVB '+evb);
+    button.setAttribute('data-evb-choice',evb);
+    const swatch=document.createElement('span');swatch.className='swatch';swatch.style.background=colors.get(evb);
+    const name=document.createElement('span');name.textContent=evb;
+    const count=document.createElement('small');count.textContent=recordCount(histories.get(evb).length);
+    button.append(swatch,name,count);
+    button.addEventListener('click',event=>{event.stopPropagation();toggle(evb)});
+    $('evb-list').append(button);
+    if(focused===evb)button.focus({preventScroll:true});
+  });
+  if(!matches.length){const message=document.createElement('p');message.className='empty';message.textContent='No matching EVBs';$('evb-list').append(message)}
+  $('evb-list').scrollTop=scrollTop;$('evb-list').scrollLeft=scrollLeft;
+}
+function select(ids){
+  selected=new Set((typeof ids==='string'?[ids]:ids||[]).filter(evb=>histories.has(evb)));
+  updateSelection();
+}
+function toggle(evb){
+  if(selected.has(evb))selected.delete(evb);else if(histories.has(evb))selected.add(evb);
+  updateSelection();
+}
+function updateSelection(redraw=true){
+  const count=selected.size,first=[...selected][0];
+  $('chart-hint').textContent=count?'Only recorded dates for the selected EVBs are shown. Select more devices to compare, or click blank space to clear.':'Select one or more EVBs from the list or click lines to compare their histories.';
+  tooltip.hidden=true;
+  $('show-all').setAttribute('aria-pressed',String(!count));
+  $('show-all').textContent=count?'Clear selection · Show all':'Show all EVBs';
+  $('selection').textContent=count===1?'EVB '+first:count?count+' selected':'Showing all';
+  $('chart-title').textContent=count===1?'EVB '+first+' platform history':count?count+' selected EVB platform histories':'All EVB platform histories';
+  list();detail();
+  if(redraw && typeof renderTimeline==='function')renderTimeline(timelineAnchor());else draw();
+}
+function detail(){
+  const content=$('detail-content');content.replaceChildren();
+  if(!selected.size){
+    $('detail-title').textContent='EVB details';$('detail-meta').textContent='';
+    const p=document.createElement('p');p.className='instructions';
+    p.textContent='Select one or more EVBs to see their dates, platforms, and record numbers.';content.append(p);return;
+  }
+  const ids=evbs.filter(evb=>selected.has(evb));
+  const multiple=ids.length>1,records=ids.flatMap(evb=>histories.get(evb));
+  $('detail-title').textContent=multiple?'Selected EVB histories':ids[0]+' · Platform history';
+  $('detail-meta').textContent=multiple?ids.length+' EVBs · '+recordCount(records.length):recordCount(records.length)+' · Last platform: '+records[records.length-1].platform;
+  const scroll=document.createElement('div');scroll.className='table-scroll';
+  const table=document.createElement('table'),head=document.createElement('thead'),row=document.createElement('tr');
+  const labels=[...(multiple?['EVB']:[]),'Date','Platform / Place','Record #','History'];
+  labels.forEach(label=>{const th=document.createElement('th');th.scope='col';th.textContent=label;row.append(th)});
+  head.append(row);table.append(head);
+  const body=document.createElement('tbody');
+  records.forEach(record=>{
+    const tr=document.createElement('tr');
+    [...(multiple?[record.evb]:[]),record.date,record.platform,'#'+record.number,record.history?'Checked':'Unchecked'].forEach((text,i)=>{
+      const td=document.createElement('td');
+      if(i===labels.length-1){const tag=document.createElement('span');tag.className=record.history?'history':'status';tag.textContent=text;td.append(tag)}else td.textContent=text;
+      tr.append(td);
+    });body.append(tr);
+  });
+  table.append(body);scroll.append(table);content.append(scroll);
+}
 function draw(){
   chart.querySelectorAll('.evb-track').forEach(track=>{
-    track.style.display=selected && track.getAttribute('data-evb')!==selected?'none':'';
+    track.style.display=selected.size && !selected.has(track.getAttribute('data-evb'))?'none':'';
   });
-  if(selected)chart.setAttribute('data-selected',selected);else chart.removeAttribute('data-selected');
-  $('svg-title').textContent=selected?'EVB '+selected+' platform history':'All EVB platform histories';
+  if(selected.size)chart.setAttribute('data-selected',[...selected].join(','));else chart.removeAttribute('data-selected');
+  $('svg-title').textContent=$('chart-title').textContent;
 }
 chart.addEventListener('click',event=>{
   const track=event.target.closest('[data-evb]');
-  if(track){
-    event.stopPropagation();
-    const evb=track.getAttribute('data-evb');
-    select(selected===evb?null:evb);
-  } else if(selected){
-    select(null);
-  }
+  if(track){event.stopPropagation();toggle(track.getAttribute('data-evb'))}
+  else if(selected.size)select(null);
 });
 document.addEventListener('click',event=>{
-  if(selected && !event.target.closest('input, textarea, select, [contenteditable], .chart-scroll, .timeline-controls'))select(null);
+  if(selected.size && !event.target.closest('button, a, input, textarea, select, label, [contenteditable], .table-scroll, .chart-scroll, .timeline-controls'))select(null);
 });
 $('search').addEventListener('input',list);
 $('show-all').addEventListener('click',()=>select(null));
