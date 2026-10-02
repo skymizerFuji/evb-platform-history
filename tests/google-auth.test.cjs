@@ -290,6 +290,30 @@ for (const configured of [false, true]) test(`public page boots with ${configure
   assert.equal(dates().length,25,'Dense axes retain every recorded date');
   assert.ok(Number(element('chart').attrs.width)>element('timeline-scroll').clientWidth,'Dense axes scroll horizontally');
   assert.ok(Number(ticks()[1].attrs.x)-Number(ticks()[0].attrs.x)>=64,'Labels retain readable spacing');
+  run('applyData({...data,platforms:["BOARD-A","BOARD-B","BOARD-C","BOARD-D"],records:[{evb:"DEMO-EVB",platform:"BOARD-A",date:"2026-09-01",number:1},{evb:"DEMO-EVB",platform:"BOARD-C",date:"2026-09-03",number:2},{evb:"DEMO-B",platform:"BOARD-C",date:"2026-09-02",number:3},{evb:"DEMO-B",platform:"BOARD-D",date:"2026-09-04",number:4},{evb:"DEMO-C",platform:"BOARD-B",date:"2026-09-01",number:5}]})');
+  const boards = () => element('chart').children.filter(node => node.attrs.class === 'platform-tick').map(node => node.textContent);
+  const line = element('chart').querySelectorAll().find(track => track.attrs['data-evb'] === 'DEMO-EVB');
+  element('chart').events.click({target:{closest:()=>line},stopPropagation(){}});
+  assert.deepEqual(visible(),['DEMO-EVB']);
+  assert.deepEqual(boards(),['BOARD-A','BOARD-C'],'Clicking a line removes unrelated board rows');
+  assert.equal(element('evb-list').children.length,3,'Other devices remain available for multi-selection');
+  const boardRows = element('chart').children.filter(node => node.attrs.class === 'platform-tick');
+  for (const point of element('chart').querySelectorAll()[0].children.filter(node => node.attrs.cy !== undefined)) {
+    const board = point.children[0].textContent.split(' · ')[1];
+    assert.equal(Number(point.attrs.cy),Number(boardRows.find(row => row.textContent === board).attrs.y)-4,'Selected line is centered on its remaining board row');
+  }
+  choose('DEMO-B');
+  assert.deepEqual(boards(),['BOARD-A','BOARD-C','BOARD-D'],'Multiple selections combine board rows in their original order');
+  run('zoomTimeline(2);applyData({...data,records:[...data.records]})');
+  assert.deepEqual(boards(),['BOARD-A','BOARD-C','BOARD-D'],'Zoom and refresh preserve board filtering');
+  choose('DEMO-EVB');
+  assert.deepEqual(boards(),['BOARD-C','BOARD-D'],'Deselecting a device drops only its exclusive board rows');
+  element('chart').events.click({target:{closest:()=>null}});
+  assert.deepEqual(boards(),['BOARD-A','BOARD-B','BOARD-C','BOARD-D'],'Blank chart space restores all board rows');
+  assert.equal(visible().length,3);
+  choose('DEMO-B');
+  documentEvents.click({target:{closest:()=>null}});
+  assert.deepEqual(boards(),['BOARD-A','BOARD-B','BOARD-C','BOARD-D'],'Blank page space restores all board rows');
   element('disconnect-google').events.click({stopPropagation(){}});
   assert.equal(run('data.records.length'),0);
   assert.equal(run('histories.size'),0);

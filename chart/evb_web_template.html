@@ -93,7 +93,7 @@ function toggle(evb){
 }
 function updateSelection(redraw=true){
   const count=selected.size,first=[...selected][0];
-  $('chart-hint').textContent=count?'Only recorded dates for the selected EVBs are shown. Select more devices to compare, or click blank space to clear.':'Select one or more EVBs from the list or click lines to compare their histories.';
+  $('chart-hint').textContent=count?'Only platforms and recorded dates for the selected EVBs are shown. Select more devices to compare, or click blank space to clear.':'Select one or more EVBs from the list or click lines to compare their histories.';
   tooltip.hidden=true;
   $('show-all').setAttribute('aria-pressed',String(!count));
   $('show-all').textContent=count?'Clear selection · Show all':'Show all EVBs';

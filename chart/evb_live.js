@@ -35,9 +35,12 @@ function dateSlot(timestamp, dates) {
   return dates.length - 1;
 }
 function makeChart(next, requestedWidth) {
-  const height = Math.max(670, next.platforms.length * 38 + 98);
+  const visibleRecords = next.records.filter(record => !selected.size || selected.has(record.evb));
+  const usedPlatforms = new Set(visibleRecords.map(record => record.platform));
+  const platforms = selected.size ? next.platforms.filter(platform => usedPlatforms.has(platform)) : next.platforms;
+  const height = Math.max(670, platforms.length * 38 + 98);
   const left = 126, right = 30, top = 36, bottom = 62;
-  const rowHeight = (height - top - bottom) / next.platforms.length;
+  const rowHeight = (height - top - bottom) / Math.max(1, platforms.length);
   const ids = [...new Set(next.records.map(r => r.evb))].sort((a, b) => a.localeCompare(b, 'en', {numeric: true}));
   const dates = recordedDates(next), slots = new Map(dates.map((date, index) => [date, index]));
   const width = requestedWidth || Math.max(1600, (dates.length - 1) * dateSpacing(dates) + left + right);
@@ -46,12 +49,12 @@ function makeChart(next, requestedWidth) {
   const svg = svgNode('svg', {viewBox: `0 0 ${width} ${height}`});
   svg.append(svgNode('title', {id: 'svg-title'}, 'EVB platform history chart'),
     svgNode('desc', {id: 'svg-description'}, 'Recorded dates are equally spaced on the horizontal axis, regardless of elapsed time. Platforms are on the vertical axis. Each line represents one EVB.'));
-  next.platforms.forEach((platform, level) => {
-    const members = ids.filter(evb => next.records.some(r => r.evb === evb && r.platform === platform));
+  platforms.forEach((platform, level) => {
+    const members = ids.filter(evb => visibleRecords.some(r => r.evb === evb && r.platform === platform));
     members.forEach((evb, i) => positions.set(JSON.stringify([platform, evb]), top + (level + .5) * rowHeight +
       (i - (members.length - 1) / 2) * Math.min(5, 27 / Math.max(1, members.length - 1))));
     if (level % 2 === 0) svg.append(svgNode('rect', {x: left, y: top + level * rowHeight, width: width-left-right, height: rowHeight, fill: '#182538'}));
-    svg.append(svgNode('text', {x: left-14, y: top+(level+.5)*rowHeight+4, 'text-anchor': 'end', fill: '#bdcbdd'}, platform));
+    svg.append(svgNode('text', {class: 'platform-tick', 'data-platform': platform, x: left-14, y: top+(level+.5)*rowHeight+4, 'text-anchor': 'end', fill: '#bdcbdd'}, platform));
   });
   const sameYear = dateSpacing(dates) === 64;
   dates.forEach(date => {
