@@ -129,6 +129,12 @@ test('public page initializes empty and disconnect removes rendered data and det
   assert.equal(run('data.records.length'),0);
   assert.equal(run('document.body.getAttribute("data-auth-required")'),'true');
   assert.equal(element('login-screen').hidden,false);
+  assert.equal(element('connect-google').disabled,true);
+  assert.equal(element('connect-google').textContent,'Sign-in not enabled yet');
+  assert.equal(element('login-status').getAttribute('data-state'),'error');
+  run('EVB_PUBLIC_CONFIG.clientId="example.apps.googleusercontent.com";updateStatus("Sign in to view data.","saved")');
+  assert.equal(element('connect-google').disabled,false);
+  assert.equal(element('connect-google').textContent,'Sign in with Google');
   assert.equal(element('refresh-sheet').disabled,true);
   run('applyData({year:2026,platforms:["DEMO-PLATFORM"],records:[{evb:"DEMO-EVB",platform:"DEMO-PLATFORM",date:"2026-09-01",number:1,history:false}]});select("DEMO-EVB")');
   assert.equal(element('chart').querySelectorAll().length,1);

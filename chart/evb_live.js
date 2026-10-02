@@ -144,10 +144,12 @@ function updateStatus(message, state) {
   $('sync-status').textContent = message;
   $('sync-status').setAttribute('data-state', state);
   if (source.mode === 'google-oauth') {
+    const configured = Boolean(globalThis.EVB_PUBLIC_CONFIG?.clientId);
     $('login-status').textContent = message;
-    $('login-status').setAttribute('data-state', state);
-    $('connect-google').disabled = state === 'loading';
-    $('connect-google').textContent = state === 'loading' ? 'Loading your timeline…' : 'Sign in with Google';
+    $('login-status').setAttribute('data-state', configured ? state : 'error');
+    $('connect-google').disabled = !configured || state === 'loading';
+    $('connect-google').textContent = !configured ? 'Sign-in not enabled yet' :
+      state === 'loading' ? 'Loading your timeline…' : 'Sign in with Google';
   }
 }
 function updatedLabel() {
@@ -224,7 +226,7 @@ if (source.mode === 'google-oauth') {
   $('connect-google').addEventListener('click', event => {event.stopPropagation(); oauthClient.connect();});
   $('disconnect-google').addEventListener('click', event => {event.stopPropagation(); oauthClient.disconnect();});
   clearLiveData(config.clientId ? 'Sign in with a Google account that can view the source spreadsheet.' :
-    'Google sign-in is not configured yet. Please contact the site administrator.');
+    'Google sign-in has not been enabled for this website yet. Please contact the site administrator to finish setup.');
   setInterval(() => {if (!document.hidden && oauthClient.connected) refreshSheet();}, source.refreshSeconds * 1000);
 } else if (source.mode === 'apps-script') {
   refreshSheet();
