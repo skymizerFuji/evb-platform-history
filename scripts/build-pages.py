@@ -12,6 +12,9 @@ if config['clientId'] and not re.fullmatch(r'[A-Za-z0-9_.-]+\.apps\.googleuserco
     raise SystemExit('Expected a web OAuth Client ID ending in .apps.googleusercontent.com.')
 source = root / 'chart'
 template = (source / 'evb_web_template.html').read_text()
+template = template.replace('<body>', '<body data-auth-required="true">')
+template = template.replace('id="login-screen" aria-labelledby="login-title" hidden',
+                            'id="login-screen" aria-labelledby="login-title"')
 template = template.replace('__EVB_LOGIC__', (source / 'evb_data.js').read_text())
 template = template.replace('__EVB_LIVE__', (source / 'evb_live.js').read_text())
 template = template.replace('<script id="live-sync">', '<script id="google-auth">' +

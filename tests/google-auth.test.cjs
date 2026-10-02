@@ -118,7 +118,7 @@ test('public page initializes empty and disconnect removes rendered data and det
   element('evb-data').textContent = html.match(/id="evb-data" type="application\/json">([\s\S]*?)<\/script>/)[1];
   element('chart').setAttribute('width',1100);
   const context = vm.createContext({
-    document:{getElementById:element,createElement:()=>new Element(),createElementNS:()=>new Element(),addEventListener(){}},
+    document:{body:new Element(),getElementById:element,createElement:()=>new Element(),createElementNS:()=>new Element(),addEventListener(){}},
     ResizeObserver:class{observe(){}}, setTimeout(){}, clearTimeout(){}, setInterval(){},
     AbortController, URL, EVB_PUBLIC_CONFIG:{clientId:''}
   });
@@ -127,14 +127,20 @@ test('public page initializes empty and disconnect removes rendered data and det
   }
   const run = source => vm.runInContext(source,context);
   assert.equal(run('data.records.length'),0);
+  assert.equal(run('document.body.getAttribute("data-auth-required")'),'true');
+  assert.equal(element('login-screen').hidden,false);
   assert.equal(element('refresh-sheet').disabled,true);
   run('applyData({year:2026,platforms:["DEMO-PLATFORM"],records:[{evb:"DEMO-EVB",platform:"DEMO-PLATFORM",date:"2026-09-01",number:1,history:false}]});select("DEMO-EVB")');
   assert.equal(element('chart').querySelectorAll().length,1);
+  assert.equal(run('document.body.getAttribute("data-auth-required")'),'false');
+  assert.equal(element('login-screen').hidden,true);
   assert.match(element('detail-title').textContent,/DEMO-EVB/);
   element('disconnect-google').events.click({stopPropagation(){}});
   assert.equal(run('data.records.length'),0);
   assert.equal(run('histories.size'),0);
   assert.equal(run('selected'),null);
+  assert.equal(run('document.body.getAttribute("data-auth-required")'),'true');
+  assert.equal(element('login-screen').hidden,false);
   assert.equal(element('chart').querySelectorAll().length,0);
   assert.equal(element('detail-title').textContent,'EVB details');
   assert.ok(!JSON.stringify(element('chart').children).includes('DEMO-PLATFORM'));

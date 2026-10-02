@@ -5,6 +5,13 @@ let lastUpdated = null, activeRequest = false;
 let oauthClient = null;
 let refreshQueued = false;
 $('source-link').href = sheetURL;
+$('login-source').href = sheetURL;
+
+function showLogin(visible) {
+  if (source.mode !== 'google-oauth') return;
+  document.body.setAttribute('data-auth-required', String(visible));
+  $('login-screen').hidden = !visible;
+}
 
 function svgNode(tag, attributes = {}, text) {
   const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
@@ -128,6 +135,7 @@ function applyData(next) {
   const anchorDate = timelineAnchor();
   data = {...next, source};
   rebuildIndex();
+  showLogin(false);
   renderTimeline(anchorDate);
   updateSummary();
   select(selected && histories.has(selected) ? selected : null);
@@ -135,12 +143,19 @@ function applyData(next) {
 function updateStatus(message, state) {
   $('sync-status').textContent = message;
   $('sync-status').setAttribute('data-state', state);
+  if (source.mode === 'google-oauth') {
+    $('login-status').textContent = message;
+    $('login-status').setAttribute('data-state', state);
+    $('connect-google').disabled = state === 'loading';
+    $('connect-google').textContent = state === 'loading' ? 'Loading your timeline…' : 'Sign in with Google';
+  }
 }
 function updatedLabel() {
   return lastUpdated ? new Date(lastUpdated).toLocaleString('en-GB', {hour12:false}) : 'not yet synced';
 }
 function clearLiveData(message) {
   refreshQueued = false;
+  showLogin(true);
   data = {...data, records: [], platforms: []};
   rebuildIndex(); lastUpdated = null;
   const width = timeline.clientWidth || 1100;
