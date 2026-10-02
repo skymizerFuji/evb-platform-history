@@ -20,8 +20,7 @@ function svgNode(tag, attributes = {}, text) {
   return node;
 }
 function recordedDates(next) {
-  return [...new Set(next.records.filter(record => !selected.size || selected.has(record.evb))
-    .map(record => record.date))].sort();
+  return [...new Set(next.records.map(record => record.date))].sort();
 }
 function dateSpacing(dates) {
   return dates.length && dates[0].slice(0, 4) !== dates[dates.length - 1].slice(0, 4) ? 100 : 64;
@@ -37,7 +36,7 @@ function dateSlot(timestamp, dates) {
 function makeChart(next, requestedWidth) {
   const visibleRecords = next.records.filter(record => !selected.size || selected.has(record.evb));
   const usedPlatforms = new Set(visibleRecords.map(record => record.platform));
-  const platforms = selected.size ? next.platforms.filter(platform => usedPlatforms.has(platform)) : next.platforms;
+  const platforms = next.platforms;
   const height = Math.max(670, platforms.length * 38 + 98);
   const left = 126, right = 30, top = 36, bottom = 62;
   const rowHeight = (height - top - bottom) / Math.max(1, platforms.length);
@@ -50,14 +49,17 @@ function makeChart(next, requestedWidth) {
   svg.append(svgNode('title', {id: 'svg-title'}, 'EVB platform history chart'),
     svgNode('desc', {id: 'svg-description'}, 'Recorded dates are equally spaced on the horizontal axis, regardless of elapsed time. Platforms are on the vertical axis. Each line represents one EVB.'));
   platforms.forEach((platform, level) => {
-    const members = ids.filter(evb => visibleRecords.some(r => r.evb === evb && r.platform === platform));
+    const members = ids.filter(evb => next.records.some(r => r.evb === evb && r.platform === platform));
     members.forEach((evb, i) => positions.set(JSON.stringify([platform, evb]), top + (level + .5) * rowHeight +
       (i - (members.length - 1) / 2) * Math.min(5, 27 / Math.max(1, members.length - 1))));
-    if (level % 2 === 0) svg.append(svgNode('rect', {x: left, y: top + level * rowHeight, width: width-left-right, height: rowHeight, fill: '#182538'}));
-    svg.append(svgNode('text', {class: 'platform-tick', 'data-platform': platform, x: left-14, y: top+(level+.5)*rowHeight+4, 'text-anchor': 'end', fill: '#bdcbdd'}, platform));
+    const opacity = !selected.size || usedPlatforms.has(platform) ? 1 : .3;
+    if (level % 2 === 0) svg.append(svgNode('rect', {x: left, y: top + level * rowHeight, width: width-left-right, height: rowHeight, fill: '#182538', opacity}));
+    svg.append(svgNode('text', {class: 'platform-tick', 'data-platform': platform, x: left-14, y: top+(level+.5)*rowHeight+4, 'text-anchor': 'end', fill: '#bdcbdd', opacity}, platform));
   });
   const sameYear = dateSpacing(dates) === 64;
+  const focusedDates = new Set(visibleRecords.map(record => record.date));
   dates.forEach(date => {
+    if (!focusedDates.has(date)) return;
     const px = x(date);
     svg.append(svgNode('path', {class: 'date-grid', 'data-date': date, d: `M ${px} ${top} V ${height-bottom}`, stroke: '#2a394e', fill: 'none'}));
     svg.append(svgNode('text', {class: 'date-tick', 'data-date': date, x: px, y: height-bottom+23, 'text-anchor': 'middle', fill: '#a6b7cb'},
@@ -66,12 +68,12 @@ function makeChart(next, requestedWidth) {
   svg.append(svgNode('text', {x:10,y:18,fill:'#a6b7cb'}, 'Platform / Place'),
     svgNode('text', {x:(left+width-right)/2,y:height-12,'text-anchor':'middle',fill:'#a6b7cb'}, 'Date'));
   ids.forEach((evb, index) => {
-    if (selected.size && !selected.has(evb)) return;
     const records = next.records.filter(r => r.evb === evb).sort((a,b) => a.date.localeCompare(b.date));
     const color = `hsl(${(index*137.508+165)%360},70%,${index%3===0?66:74}%)`;
     const group = svgNode('g', {class:'evb-track', 'data-evb':evb});
     group.append(svgNode('title', {}, `EVB ${evb}`));
     const path = records.map((r,i) => `${i?'H':'M'} ${x(r.date)} ${i?'V':''} ${positions.get(JSON.stringify([r.platform,evb]))}`).join(' ') + ` H ${x(dates[dates.length - 1])}`;
+    group.append(svgNode('path', {class:'trajectory-hit', d:path, fill:'none',stroke:'transparent','stroke-width':8,'pointer-events':'stroke','aria-hidden':'true'}));
     group.append(svgNode('path', {class:'trajectory', d:path, fill:'none',stroke:color,'stroke-width':1.8,'stroke-linejoin':'round'}));
     records.forEach(r => {
       const circle = svgNode('circle', {cx:x(r.date),cy:positions.get(JSON.stringify([r.platform,evb])),r:3,fill:color,stroke:'#131e2d','stroke-width':1});
