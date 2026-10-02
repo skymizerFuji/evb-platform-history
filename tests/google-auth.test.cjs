@@ -35,7 +35,8 @@ test('public website has no initial records, platform names, or pre-rendered tra
   assert.ok(!html.includes('class="evb-track"'));
   assert.ok(!html.includes('localStorage'));
   assert.ok(!html.includes('sessionStorage'));
-  assert.match(html, /src="\.\/config.js"/);
+  assert.match(html, /<script id="public-config">globalThis.EVB_PUBLIC_CONFIG = /);
+  assert.doesNotMatch(html, /src="\.\/config.js"/);
 });
 
 test('no Google Sheets request is made without authorization', async () => {
@@ -100,7 +101,7 @@ test('disconnect also invalidates a delayed Google sign-in callback', () => {
   assert.equal(f.client.connected, false);
 });
 
-test('public page initializes empty and disconnect removes rendered data and details', () => {
+for (const configured of [false, true]) test(`public page boots with ${configured ? 'its generated configuration' : 'missing configuration'} and disconnect clears data`, () => {
   const html = fs.readFileSync(new URL('../public/evb.html', `file://${__filename}`), 'utf8');
   class Element {
     constructor() {this.children=[]; this.attrs={}; this.style={}; this.events={}; this.value=''; this.clientWidth=1000; this.scrollLeft=0;}
@@ -117,24 +118,36 @@ test('public page initializes empty and disconnect removes rendered data and det
   const element = id => {if (!elements.has(id)) elements.set(id,new Element()); return elements.get(id);};
   element('evb-data').textContent = html.match(/id="evb-data" type="application\/json">([\s\S]*?)<\/script>/)[1];
   element('chart').setAttribute('width',1100);
+  let requestedClient, popupRequests = 0;
   const context = vm.createContext({
     document:{body:new Element(),getElementById:element,createElement:()=>new Element(),createElementNS:()=>new Element(),addEventListener(){}},
     ResizeObserver:class{observe(){}}, setTimeout(){}, clearTimeout(){}, setInterval(){},
-    AbortController, URL, EVB_PUBLIC_CONFIG:{clientId:''}
+    AbortController, URL,
+    google:{accounts:{oauth2:{initTokenClient(options) {
+      requestedClient = options.client_id;
+      return {requestAccessToken() {popupRequests++;}};
+    }}}}
   });
   for (const match of html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/g)) {
-    if (!/application\/json|src=/.test(match[1])) vm.runInContext(match[2],context);
+    if (!/application\/json|src=/.test(match[1])) {
+      vm.runInContext(match[2],context);
+      if (!configured && /id="public-config"/.test(match[1])) vm.runInContext('EVB_PUBLIC_CONFIG.clientId=""',context);
+    }
   }
   const run = source => vm.runInContext(source,context);
   assert.equal(run('data.records.length'),0);
   assert.equal(run('document.body.getAttribute("data-auth-required")'),'true');
   assert.equal(element('login-screen').hidden,false);
-  assert.equal(element('connect-google').disabled,true);
-  assert.equal(element('connect-google').textContent,'Sign-in not enabled yet');
-  assert.equal(element('login-status').getAttribute('data-state'),'error');
-  run('EVB_PUBLIC_CONFIG.clientId="example.apps.googleusercontent.com";updateStatus("Sign in to view data.","saved")');
-  assert.equal(element('connect-google').disabled,false);
-  assert.equal(element('connect-google').textContent,'Sign in with Google');
+  assert.equal(element('connect-google').disabled,!configured);
+  assert.equal(element('connect-google').textContent,configured ? 'Sign in with Google' : 'Sign-in not enabled yet');
+  if (configured) {
+    const expected = JSON.parse(html.match(/<script id="public-config">globalThis.EVB_PUBLIC_CONFIG = ([\s\S]*?);\s*<\/script>/)[1]).clientId;
+    element('connect-google').events.click({stopPropagation(){}});
+    assert.equal(popupRequests,1,'Click requests the Google sign-in popup');
+    assert.equal(requestedClient,expected);
+  } else {
+    assert.equal(element('login-status').getAttribute('data-state'),'error');
+  }
   assert.equal(element('refresh-sheet').disabled,true);
   run('applyData({year:2026,platforms:["DEMO-PLATFORM"],records:[{evb:"DEMO-EVB",platform:"DEMO-PLATFORM",date:"2026-09-01",number:1,history:false}]});select("DEMO-EVB")');
   assert.equal(element('chart').querySelectorAll().length,1);

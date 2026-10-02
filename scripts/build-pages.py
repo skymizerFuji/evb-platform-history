@@ -11,6 +11,9 @@ config['clientId'] = os.environ.get('GOOGLE_CLIENT_ID') or config['clientId']
 if config['clientId'] and not re.fullmatch(r'[A-Za-z0-9_.-]+\.apps\.googleusercontent\.com', config['clientId']):
     raise SystemExit('Expected a web OAuth Client ID ending in .apps.googleusercontent.com.')
 source = root / 'chart'
+public_config = 'globalThis.EVB_PUBLIC_CONFIG = ' + json.dumps({
+    'clientId': config['clientId'], 'sheetName': config['sheetName']
+}).replace('<', '\\u003c') + ';\n'
 template = (source / 'evb_web_template.html').read_text()
 template = template.replace('<body>', '<body data-auth-required="true">')
 template = template.replace('id="login-screen" aria-labelledby="login-title" hidden',
@@ -20,7 +23,7 @@ template = template.replace('__EVB_LIVE__', (source / 'evb_live.js').read_text()
 template = template.replace('<script id="live-sync">', '<script id="google-auth">' +
                             (source / 'evb_google_auth.js').read_text() + '</script>\n<script id="live-sync">')
 template = template.replace('<script id="evb-data"',
-    '<script src="./config.js"></script>\n<script src="https://accounts.google.com/gsi/client" async defer></script>\n<script id="evb-data"')
+    '<script id="public-config">' + public_config + '</script>\n<script src="https://accounts.google.com/gsi/client" async defer></script>\n<script id="evb-data"')
 payload = {'year': config['year'], 'source': {'spreadsheetId': config['spreadsheetId'],
            'mode': 'google-oauth', 'refreshSeconds': 60}, 'platforms': [], 'records': []}
 placeholder = ('<svg id="chart" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 670" '
@@ -34,6 +37,6 @@ assert 'class="evb-track"' not in html
 public = root / 'public'
 public.mkdir(exist_ok=True)
 (public / 'evb.html').write_text(html)
-(public / 'config.js').write_text('globalThis.EVB_PUBLIC_CONFIG = ' +
-    json.dumps({'clientId': config['clientId'], 'sheetName': config['sheetName']}).replace('<', '\\u003c') + ';\n')
+# Keep this for previously cached pages; new pages use their own inline config.
+(public / 'config.js').write_text(public_config)
 print('Public UI generated: no embedded EVB records. Google OAuth ' + ('configured.' if config['clientId'] else 'awaits Client ID.'))
