@@ -3,6 +3,7 @@
   'use strict';
   const natural = (a, b) => a.localeCompare(b, 'en', {numeric: true});
   const text = value => String(value ?? '').trim();
+  const columnName = value => ['Creadted date', 'Created date'].includes(text(value)) ? 'Change date' : text(value);
   function parseCSV(source) {
     if (/^\s*</.test(source)) throw new Error('Google returned a sign-in page instead of CSV. Check the sheet sharing settings.');
     const rows = []; let row = [], cell = '', quoted = false;
@@ -27,9 +28,12 @@
     let y = year, m, d, match;
     if ((match = text(value).match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?$/))) {
       m = +match[1]; d = +match[2]; if (match[3]) y = +match[3];
-    } else if ((match = text(value).match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/))) {
+    } else if ((match = text(value).match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/))) {
       y = +match[1]; m = +match[2]; d = +match[3];
-    } else throw new Error(`Unrecognized date: ${text(value)}. Use M/D or YYYY-MM-DD.`);
+      if (match[4] && (+match[4] > 23 || +match[5] > 59 || +(match[6] || 0) > 59))
+        throw new Error(`Invalid time: ${text(value)}.`);
+    } else throw new Error(`Unrecognized date: ${text(value)}. Use M/D, YYYY-MM-DD, or YYYY-MM-DD HH:mm.`);
+    // Keep the sheet's calendar date; the chart groups records by day, without timezone conversion.
     const day = new Date(Date.UTC(y, m - 1, d));
     if (day.getUTCFullYear() !== y || day.getUTCMonth() !== m - 1 || day.getUTCDate() !== d)
       throw new Error(`Invalid date: ${text(value)}.`);
@@ -37,9 +41,9 @@
   }
   function fromRows(rows, year) {
     const required = ['#', 'Platform / Place', 'EVB / DVB', 'Change date', 'History'];
-    const headerIndex = rows.findIndex(row => required.every(column => row.map(text).includes(column)));
-    if (headerIndex < 0) throw new Error('The sheet must contain #, Platform / Place, EVB / DVB, Change date, and History columns.');
-    const columns = rows[headerIndex].map(text);
+    const headerIndex = rows.findIndex(row => required.every(column => row.map(columnName).includes(column)));
+    if (headerIndex < 0) throw new Error('The sheet must contain #, Platform / Place, EVB / DVB, a date column (Change date, Creadted date, or Created date), and History.');
+    const columns = rows[headerIndex].map(columnName);
     const groups = new Map(), platforms = new Set();
     rows.slice(headerIndex + 1).forEach((row, index) => {
       if (!row.some(value => text(value))) return;

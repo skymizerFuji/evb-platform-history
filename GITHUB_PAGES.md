@@ -70,6 +70,9 @@ EVB 表格欄位，填入 sheetName。修改設定後要推送或重新執行部
 
 ## 資料與登入行為
 
+- 日期欄支援 `Change date`、`Creadted date`（新版 Sheet 的拼字）及 `Created date`。
+  日期可使用 `M/D`、`M/D/YYYY`、`YYYY-MM-DD` 或 `YYYY-MM-DD HH:mm`（亦支援秒數）。
+  圖表依試算表中的日曆日期分組，不做時區換算；同日仍依最大 `#` 與 History 規則選取紀錄。
 - 預設僅在目前頁面記憶體保存 access token。勾選 **Remember me on this device** 後，
   會在本機瀏覽器儲存短效 token 和到期時間，最長一小時；偏好設定也會被記住。
   重開頁面時，只使用尚未到期的授權重新讀取 Sheets，試算表資料不會保存到瀏覽器儲存區。

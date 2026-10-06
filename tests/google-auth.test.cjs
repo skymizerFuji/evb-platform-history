@@ -131,6 +131,46 @@ test('authorized requests use bearer headers and select only five data columns',
     ['A','B','C','D','E'].map(letter => "'EVB''s table'!" + letter + '2:' + letter + '50'));
 });
 
+for (const dateColumn of ['Change date', 'Creadted date', 'Created date']) {
+  test(`reads ${dateColumn} timestamps from the actual selected sheet column`, async () => {
+    const header = ['#', 'Platform / Place', 'Location', 'EVB / DVB', 'Dept.', 'Owner', 'Version', 'Req. Form', 'Remark', dateColumn, 'History'];
+    const urls = [];
+    const responses = [
+      {sheets: [{properties: {title: 'Test', gridProperties: {rowCount: 50, columnCount: 11}}}]},
+      {valueRanges: [{values: [['Title'], header]}]},
+      {valueRanges: [[[1], [2]], [['BOARD-A'], ['BOARD-B']], [['TEST-EVB'], ['TEST-EVB']],
+        [['2026-09-07 00:00'], ['2026-10-03 23:59:59']], [[true], [false]]].map(values => ({values}))}
+    ];
+    const f = fixture({fetch: async url => {
+      urls.push(url);
+      return {ok: true, status: 200, json: async () => responses[urls.length - 1]};
+    }});
+    f.authorize();
+    const result = await f.client.read();
+    const data = EVBData.fromRows(result.rows, 2025);
+    assert.deepEqual(data.records.map(record => record.date), ['2026-09-07', '2026-10-03']);
+    assert.deepEqual(new URL(urls[2]).searchParams.getAll('ranges'),
+      ['A', 'B', 'D', 'J', 'K'].map(letter => `'Test'!${letter}3:${letter}50`));
+    const csv = header.join(',') + '\n1,BOARD-A,Lab,TEST-EVB,,,,,,2026-09-07 00:00,\n';
+    assert.equal(EVBData.fromCSV(csv, 2025).records[0].date, '2026-09-07');
+  });
+}
+
+test('date parsing retains calendar days and rejects invalid dates and times', () => {
+  for (const input of ['9/7', '9/7/2026', '2026-09-07', '2026/09/07',
+    '2026-09-07 00:00', '2026-09-07 23:59:59', '2026-09-07T12:30']) {
+    assert.equal(EVBData.parseDate(input, 2026), '2026-09-07');
+  }
+  assert.equal(EVBData.parseDate('2024-02-29 00:00', 2026), '2024-02-29');
+  for (const input of ['2026-02-29 00:00', '2026-09-31 00:00', '2026-09-07 24:00',
+    '2026-09-07 12:60', '2026-09-07 12:30:60', '2026-09-07 garbage']) {
+    assert.throws(() => EVBData.parseDate(input, 2026), /Invalid|Unrecognized/);
+  }
+  const rows = [COLUMNS, [1, 'BOARD-A', 'TEST-EVB', '2026-09-07 23:00', true],
+    [2, 'BOARD-B', 'TEST-EVB', '2026-09-07 00:00', false]];
+  assert.equal(EVBData.fromRows(rows, 2026).records[0].platform, 'BOARD-B');
+});
+
 for (const status of [401, 403, 404]) {
   test(`HTTP ${status} clears the session and displayed records`, async () => {
     const f = fixture({status}); f.authorize();

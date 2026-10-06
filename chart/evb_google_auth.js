@@ -3,6 +3,10 @@
   'use strict';
   const SCOPE = 'https://www.googleapis.com/auth/spreadsheets.readonly';
   const COLUMNS = ['#', 'Platform / Place', 'EVB / DVB', 'Change date', 'History'];
+  const columnName = value => {
+    const name = String(value ?? '').trim();
+    return ['Creadted date', 'Created date'].includes(name) ? 'Change date' : name;
+  };
   function columnLetter(index) {
     let result = '';
     while (index > 0) { index--; result = String.fromCharCode(65 + index % 26) + result; index = Math.floor(index / 26); }
@@ -154,9 +158,9 @@
         ]);
         const matches = [];
         (previews.valueRanges || []).forEach((preview, index) => {
-          const rows = preview.values || [];
-          const row = rows.findIndex(values => COLUMNS.every(column => values.map(value => String(value).trim()).includes(column)));
-          if (row >= 0) matches.push({tab: tabs[index], row, header: rows[row].map(value => String(value).trim())});
+          const rows = (preview.values || []).map(values => values.map(columnName));
+          const row = rows.findIndex(values => COLUMNS.every(column => values.includes(column)));
+          if (row >= 0) matches.push({tab: tabs[index], row, header: rows[row]});
         });
         if (matches.length !== 1) throw new Error(matches.length ? 'Multiple EVB tabs found. Ask the site administrator to choose a sheet tab.' : 'No EVB table found in this spreadsheet.');
         const {tab, row, header} = matches[0];
