@@ -12,12 +12,12 @@ function fixture({status = 200, fetch: customFetch, storage = null} = {}) {
   const data = [
     {sheets: [{properties: {title: "EVB's table", gridProperties: {rowCount: 50, columnCount: 8}}}]},
     {valueRanges: [{values: [COLUMNS]}]},
-    {valueRanges: [ [[1],[2]], [['SW-A'],['SW-B']], [['DEMO'],['DEMO']], [['9/1'],['9/2']], [[false],[true]] ].map(values => ({values}))}
+    {valueRanges: [ [[1],[2]], [['SW-A'],['SW-B']], [['DEMO'],['DEMO']], [['9/1'],['9/2']], [[false],[true]] ].map((values, index) => ({values: [[COLUMNS[index]], ...values]}))}
   ];
   const client = createClient({
     clientId: 'example.apps.googleusercontent.com', spreadsheetId: 'test-sheet', year: 2026, storage,
     identity: () => ({initTokenClient(config) {auth = config; return {requestAccessToken() {}};}, hasGrantedAllScopes: response => response.granted !== false}),
-    fetch: customFetch || (async (url, options) => {calls.push({url, options}); return {ok:status === 200, status, json:async () => data[(calls.length - 1) % 3]};}),
+    fetch: customFetch || (async (url, options) => {calls.push({url, options}); return {ok:status === 200, status, json:async () => data[!new URL(url).pathname.endsWith('/values:batchGet') ? 0 : new URL(url).searchParams.getAll('ranges').length === 1 ? 1 : 2]};}),
     setTimeout: (callback, ms) => {const id = Symbol(); timers.set(id, {callback, ms}); return id;},
     clearTimeout: id => timers.delete(id),
     onAuthorized: () => authorized++, onCleared: message => cleared.push(message), onStatus: message => cleared.push(message)
@@ -44,6 +44,113 @@ function memoryStorage() {
     setItem:(key,value)=>values.set(key,String(value)),removeItem:key=>values.delete(key)};
 }
 const savedSessionKey = 'evb-auth:example.apps.googleusercontent.com:test-sheet:session';
+const layoutKey = 'evb-auth:example.apps.googleusercontent.com:test-sheet:layout:v1:""';
+
+test('warm refresh and reopening use one authorized request with live header validation', async () => {
+  const storage = memoryStorage(), first = fixture({storage});
+  first.authorize();
+  const cold = await first.client.read();
+  assert.equal(first.calls.length, 3);
+  assert.deepEqual((await first.client.read()).rows, cold.rows);
+  assert.equal(first.calls.length, 4);
+  const saved = JSON.parse(storage.getItem(layoutKey));
+  assert.deepEqual(Object.keys(saved).sort(), ['expiresAt', 'indexes', 'row', 'title']);
+  assert.ok(!JSON.stringify([...storage.values]).includes('test-only-token'));
+  assert.ok(!JSON.stringify([...storage.values]).includes('DEMO'));
+  const reopened = fixture({storage});
+  await assert.rejects(reopened.client.read(), /sign-in required/);
+  assert.equal(reopened.calls.length, 0);
+  reopened.authorize();
+  assert.deepEqual((await reopened.client.read()).rows, cold.rows);
+  assert.equal(reopened.calls.length, 1);
+  reopened.client.disconnect();
+  assert.equal(storage.values.size, 0);
+});
+
+function layoutFixture({failure, moved = false, empty = false} = {}) {
+  const storage = memoryStorage();
+  storage.setItem(layoutKey, JSON.stringify({title: 'Old', row: 0, indexes: [0,1,2,3,4], expiresAt: Date.now() + 60000}));
+  const urls = [];
+  const records = [[1, 'BOARD-A', 'TEST', '2026-09-07 00:00', true],
+    [2, 'BOARD-B', 'TEST', '2026-10-03 00:00', false]];
+  const f = fixture({storage, fetch: async url => {
+    urls.push(url);
+    const ranges = new URL(url).searchParams.getAll('ranges');
+    if (urls.length === 1 && failure) return {ok:false, status:failure};
+    if (urls.length === 1 && moved) return {ok:true, json:async()=>({valueRanges:COLUMNS.map(()=>({values:[['Moved']]}))})};
+    let body;
+    if (!ranges.length) body = {sheets:[{properties:{title:'New',gridProperties:{rowCount:2,columnCount:5}}}]};
+    else if (ranges.length === 1) body = {valueRanges:[{values:[['Title'],COLUMNS]}]};
+    else body = {valueRanges:COLUMNS.map((column,index)=>({values:[[column], ...(empty ? [] : records.map(row=>[row[index]]))]}))};
+    return {ok:true, json:async()=>body};
+  }});
+  f.authorize();
+  return {...f, urls, storage};
+}
+
+for (const options of [{moved:true}, {failure:400}]) test(`stale layout recovers through discovery: ${JSON.stringify(options)}`, async () => {
+  const f = layoutFixture(options);
+  const result = await f.client.read();
+  assert.equal(f.urls.length,4);
+  assert.equal(result.sheetName,'New');
+  assert.equal(EVBData.fromRows(result.rows,2026).records.length,2);
+  assert.deepEqual(new URL(f.urls[3]).searchParams.getAll('ranges'),
+    ['A','B','C','D','E'].map(letter=>`'New'!${letter}2:${letter}`));
+  await f.client.read();
+  assert.equal(f.urls.length,5);
+});
+
+test('cached reads include newly appended rows and preserve empty tables for validation', async () => {
+  const full = layoutFixture();
+  const result = await full.client.read();
+  assert.equal(result.rows.length,3);
+  assert.equal(full.urls.length,1);
+  assert.ok(new URL(full.urls[0]).searchParams.getAll('ranges').every(range=>/1:[A-E]$/.test(range)));
+  const empty = layoutFixture({empty:true});
+  const blank = await empty.client.read();
+  assert.equal(empty.urls.length,1);
+  assert.throws(()=>EVBData.fromRows(blank.rows,2026),/no EVB records/);
+});
+
+for (const status of [401,403,404,429,500]) test(`cached HTTP ${status} does not trigger discovery`, async () => {
+  const f = layoutFixture({failure:status});
+  await assert.rejects(f.client.read(),new RegExp(`HTTP ${status}`));
+  assert.equal(f.urls.length,1);
+  if ([401,403,404].includes(status)) {
+    assert.equal(f.client.connected,false);
+    assert.equal(f.storage.getItem(layoutKey),null);
+  }
+});
+
+test('expired and malformed layouts use normal discovery', async () => {
+  for (const saved of ['{bad', JSON.stringify({title:'Old',row:0,indexes:[0,1,2,3,4],expiresAt:Date.now()-1}),
+    JSON.stringify({title:'Old',row:0,indexes:[0,0,2,3,4],expiresAt:Date.now()+60000})]) {
+    const storage=memoryStorage(); storage.setItem(layoutKey,saved);
+    const f=fixture({storage}); f.authorize();
+    await f.client.read();
+    assert.equal(f.calls.length,3);
+  }
+});
+
+test('storage unavailable still allows subsequent reads to use in-memory coordinates', async () => {
+  const storage={getItem(){throw Error('blocked')},setItem(){throw Error('blocked')},removeItem(){throw Error('blocked')}};
+  const f=fixture({storage}); f.authorize();
+  await f.client.read(); await f.client.read();
+  assert.equal(f.calls.length,4);
+});
+
+test('disconnect during a cached read rejects its response without restoring coordinates', async () => {
+  const storage = memoryStorage(), first = fixture({storage});
+  first.authorize(); await first.client.read();
+  let finish;
+  const reopened = fixture({storage, fetch:()=>new Promise(resolve=>{finish=resolve;})});
+  reopened.authorize();
+  const reading = reopened.client.read();
+  reopened.client.disconnect();
+  finish({ok:true,json:async()=>({valueRanges:COLUMNS.map(column=>({values:[[column]]}))})});
+  await assert.rejects(reading,/session changed/);
+  assert.equal(storage.values.size,0);
+});
 
 test('remember is opt-in and restores an unexpired session without a Google popup', async () => {
   const storage = memoryStorage();
@@ -62,7 +169,7 @@ test('remember is opt-in and restores an unexpired session without a Google popu
   assert.equal(reopened.auth,undefined,'Restoration does not request a Google popup');
   assert.equal(reopened.client.connected,true);
   await reopened.client.read();
-  assert.equal(reopened.calls.length,3);
+  assert.equal(reopened.calls.length,1);
 });
 
 test('expired or invalid remembered sessions are removed', () => {
@@ -128,7 +235,7 @@ test('authorized requests use bearer headers and select only five data columns',
     assert.ok(!call.url.includes('test-only-token'));
   }
   assert.deepEqual(new URL(f.calls[2].url).searchParams.getAll('ranges'),
-    ['A','B','C','D','E'].map(letter => "'EVB''s table'!" + letter + '2:' + letter + '50'));
+    ['A','B','C','D','E'].map(letter => "'EVB''s table'!" + letter + '1:' + letter));
 });
 
 for (const dateColumn of ['Change date', 'Creadted date', 'Created date']) {
@@ -139,7 +246,7 @@ for (const dateColumn of ['Change date', 'Creadted date', 'Created date']) {
       {sheets: [{properties: {title: 'Test', gridProperties: {rowCount: 50, columnCount: 11}}}]},
       {valueRanges: [{values: [['Title'], header]}]},
       {valueRanges: [[[1], [2]], [['BOARD-A'], ['BOARD-B']], [['TEST-EVB'], ['TEST-EVB']],
-        [['2026-09-07 00:00'], ['2026-10-03 23:59:59']], [[true], [false]]].map(values => ({values}))}
+        [['2026-09-07 00:00'], ['2026-10-03 23:59:59']], [[true], [false]]].map((values, index) => ({values: [[COLUMNS[index] === 'Change date' ? dateColumn : COLUMNS[index]], ...values]}))}
     ];
     const f = fixture({fetch: async url => {
       urls.push(url);
@@ -150,7 +257,7 @@ for (const dateColumn of ['Change date', 'Creadted date', 'Created date']) {
     const data = EVBData.fromRows(result.rows, 2025);
     assert.deepEqual(data.records.map(record => record.date), ['2026-09-07', '2026-10-03']);
     assert.deepEqual(new URL(urls[2]).searchParams.getAll('ranges'),
-      ['A', 'B', 'D', 'J', 'K'].map(letter => `'Test'!${letter}3:${letter}50`));
+      ['A', 'B', 'D', 'J', 'K'].map(letter => `'Test'!${letter}2:${letter}`));
     const csv = header.join(',') + '\n1,BOARD-A,Lab,TEST-EVB,,,,,,2026-09-07 00:00,\n';
     assert.equal(EVBData.fromCSV(csv, 2025).records[0].date, '2026-09-07');
   });

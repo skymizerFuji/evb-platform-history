@@ -279,6 +279,23 @@ list();draw();$('interaction-note').hidden=true;
       } catch { return null; }
     }
     let remembering = cache('getItem', preferenceKey) === 'true';
+    // Cache only table coordinates, never records or authorization. Revalidate headers on every read.
+    const layoutKey = prefix + ':layout:v1:' + JSON.stringify(options.sheetName || '');
+    const layoutLifetime = 24 * 60 * 60 * 1000;
+    let layout = null;
+    try {
+      const saved = JSON.parse(cache('getItem', layoutKey));
+      if (saved && typeof saved.title === 'string' && saved.title &&
+          (!options.sheetName || options.sheetName === saved.title) &&
+          Number.isSafeInteger(saved.row) && saved.row >= 0 && saved.row < 20 &&
+          Array.isArray(saved.indexes) && saved.indexes.length === COLUMNS.length &&
+          saved.indexes.every(index => Number.isSafeInteger(index) && index >= 0 && index < 18278) &&
+          new Set(saved.indexes).size === COLUMNS.length &&
+          Number.isFinite(saved.expiresAt) && saved.expiresAt > Date.now() &&
+          saved.expiresAt <= Date.now() + layoutLifetime) layout = saved;
+      else cache('removeItem', layoutKey);
+    } catch { cache('removeItem', layoutKey); }
+    function forgetLayout() { layout = null; cache('removeItem', layoutKey); }
     function persist() {
       if (remembering && token && expiresAt > Date.now()) {
         if (!cache('setItem', sessionKey, JSON.stringify({token, expiresAt}))) {
@@ -386,16 +403,44 @@ list();draw();$('interaction-note').hidden=true;
         if (current !== version) throw new Error('Google session changed.');
         if (!response.ok) {
           if ([401, 403, 404].includes(response.status)) {
+            forgetLayout();
             clear(response.status === 401 ? 'Google authorization expired. Please sign in again.' :
               'This Google account cannot read the spreadsheet, or Sheets access is unavailable. Check access to the source sheet.');
           }
-          throw new Error('Google Sheets could not be read (HTTP ' + response.status + ').');
+          const error = new Error('Google Sheets could not be read (HTTP ' + response.status + ').');
+          error.status = response.status;
+          throw error;
         }
         const body = await response.json();
         if (current !== version) throw new Error('Google session changed.');
         return body;
       }
+      async function readLayout(target) {
+        const columns = await api('/values:batchGet', [
+          ['valueRenderOption', 'FORMATTED_VALUE'],
+          ...target.indexes.map(index => {
+            const letter = columnLetter(index + 1);
+            // Open-ended ranges include new rows without another metadata request.
+            return ['ranges', tabRange(target.title) + letter + (target.row + 1) + ':' + letter];
+          })
+        ]);
+        const values = target.indexes.map((_, index) => columns.valueRanges?.[index]?.values || []);
+        if (!values.every((column, index) => columnName(column[0]?.[0]) === COLUMNS[index])) return null;
+        const rows = Array.from({length: Math.max(0, ...values.map(column => column.length - 1))}, (_, index) =>
+          values.map(column => column[index + 1]?.[0] ?? '')).filter(values => values.some(value => String(value).trim()));
+        return {rows: [COLUMNS, ...rows], year: options.year, sheetName: target.title, updatedAt: Date.now()};
+      }
       try {
+        if (layout && layout.expiresAt > Date.now()) {
+          try {
+            const result = await readLayout(layout);
+            if (result) return result;
+          } catch (error) {
+            // Deleted/renamed tabs or removed columns invalidate an A1 range (HTTP 400).
+            if (error.status !== 400) throw error;
+          }
+        }
+        forgetLayout();
         const metadata = await api('', [['fields', 'sheets(properties(title,gridProperties(rowCount,columnCount)))']]);
         const tabs = (metadata.sheets || []).map(sheet => sheet.properties)
           .filter(tab => tab.gridProperties && (!options.sheetName || options.sheetName === tab.title));
@@ -413,25 +458,16 @@ list();draw();$('interaction-note').hidden=true;
         if (matches.length !== 1) throw new Error(matches.length ? 'Multiple EVB tabs found. Ask the site administrator to choose a sheet tab.' : 'No EVB table found in this spreadsheet.');
         const {tab, row, header} = matches[0];
         const indexes = COLUMNS.map(column => header.indexOf(column));
-        let rows = [];
-        if (row + 2 <= tab.gridProperties.rowCount) {
-          // Request only the five chart columns, not owner/department/remarks.
-          const columns = await api('/values:batchGet', [
-            ['valueRenderOption', 'FORMATTED_VALUE'],
-            ...indexes.map(index => {
-              const letter = columnLetter(index + 1);
-              return ['ranges', tabRange(tab.title) + letter + (row + 2) + ':' + letter + tab.gridProperties.rowCount];
-            })
-          ]);
-          const values = indexes.map((_, index) => columns.valueRanges?.[index]?.values || []);
-          rows = Array.from({length: Math.max(0, ...values.map(column => column.length))}, (_, index) =>
-            values.map(column => column[index]?.[0] ?? '')).filter(values => values.some(value => String(value).trim()));
-        }
-        return {rows: [COLUMNS, ...rows], year: options.year, sheetName: tab.title, updatedAt: Date.now()};
+        const target = {title: tab.title, row, indexes, expiresAt: Date.now() + layoutLifetime};
+        const result = await readLayout(target);
+        if (!result) throw new Error('The sheet columns changed while loading. Please refresh data.');
+        layout = target;
+        cache('setItem', layoutKey, JSON.stringify(target));
+        return result;
       } finally { cancel(timeout); }
     }
     return {connect, read, restore, setRemember,
-      disconnect() { setRemember(false); clear('Disconnected. Sign in to view the private spreadsheet.'); },
+      disconnect() { forgetLayout(); setRemember(false); clear('Disconnected. Sign in to view the private spreadsheet.'); },
       get remembering() { return remembering; },
       get connected() { return Boolean(token) && Date.now() < expiresAt; }, get version() { return version; }};
   }
