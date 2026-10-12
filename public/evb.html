@@ -533,7 +533,14 @@ function platformAxis(next) {
     return [platform, wrapped];
   }));
   const allLines = [...lines.values()];
-  return {lines, left: Math.max(126, ...allLines.flat().map(line => units(line) * 8 + 28)),
+  // Fit the gutter to the displayed text using the chart's actual font.
+  const measure = document.createElement('canvas').getContext?.('2d');
+  if (measure && globalThis.getComputedStyle) {
+    const style = getComputedStyle(chart);
+    measure.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  }
+  const textWidth = line => measure ? measure.measureText(line).width : units(line) * 6;
+  return {lines, left: Math.max(110, ...allLines.flat().map(line => Math.ceil(textWidth(line)) + 24)),
     rowHeight: Math.max(38, ...allLines.map(line => line.length * 16 + 12))};
 }
 function makeChart(next, requestedWidth, axis = platformAxis(next)) {
