@@ -523,7 +523,7 @@ function platformAxis(next) {
     const ids = [...latest.values()].filter(record => record.platform === platform)
       .map(record => record.evb.replace(/^EVB[\s_-]*/i, ''))
       .sort((a, b) => a.localeCompare(b, 'en', {numeric: true}));
-    const label = ids.length ? `(${ids.join(', ')}) ${platform}` : platform;
+    const label = ids.length ? `(${ids.slice(0, 2).join(', ')}${ids.length > 2 ? ', ...' : ''}) ${platform}` : platform;
     const wrapped = [''];
     for (const word of label.split(' ')) {
       const last = wrapped.length - 1;
