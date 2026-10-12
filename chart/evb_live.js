@@ -33,12 +33,37 @@ function dateSlot(timestamp, dates) {
   }
   return dates.length - 1;
 }
-function makeChart(next, requestedWidth) {
+// Current occupants come from each board's latest normalized record, independent of filtering.
+function platformAxis(next) {
+  const latest = new Map();
+  for (const record of next.records) {
+    const previous = latest.get(record.evb);
+    if (!previous || record.date > previous.date) latest.set(record.evb, record);
+  }
+  const units = text => [...text].reduce((sum, char) => sum + (char.charCodeAt(0) > 255 ? 2 : 1), 0);
+  const lines = new Map(next.platforms.map(platform => {
+    const ids = [...latest.values()].filter(record => record.platform === platform)
+      .map(record => record.evb.replace(/^EVB[\s_-]*/i, ''))
+      .sort((a, b) => a.localeCompare(b, 'en', {numeric: true}));
+    const label = ids.length ? `(${ids.join(', ')}) ${platform}` : platform;
+    const wrapped = [''];
+    for (const word of label.split(' ')) {
+      const last = wrapped.length - 1;
+      if (wrapped[last] && units(wrapped[last] + ' ' + word) > 48) wrapped.push(word);
+      else wrapped[last] += (wrapped[last] ? ' ' : '') + word;
+    }
+    return [platform, wrapped];
+  }));
+  const allLines = [...lines.values()];
+  return {lines, left: Math.max(126, ...allLines.flat().map(line => units(line) * 8 + 28)),
+    rowHeight: Math.max(38, ...allLines.map(line => line.length * 16 + 12))};
+}
+function makeChart(next, requestedWidth, axis = platformAxis(next)) {
   const visibleRecords = next.records.filter(record => !selected.size || selected.has(record.evb));
   const usedPlatforms = new Set(visibleRecords.map(record => record.platform));
   const platforms = next.platforms;
-  const height = Math.max(670, platforms.length * 38 + 98);
-  const left = 126, right = 30, top = 36, bottom = 62;
+  const height = Math.max(670, platforms.length * axis.rowHeight + 98);
+  const left = axis.left, right = 30, top = 36, bottom = 62;
   const rowHeight = (height - top - bottom) / Math.max(1, platforms.length);
   const ids = [...new Set(next.records.map(r => r.evb))].sort((a, b) => a.localeCompare(b, 'en', {numeric: true}));
   const dates = recordedDates(next), slots = new Map(dates.map((date, index) => [date, index]));
@@ -46,7 +71,7 @@ function makeChart(next, requestedWidth) {
   const x = date => left + slots.get(date) / Math.max(1, dates.length - 1) * (width - left - right);
   const positions = new Map();
   const labels = [];
-  const svg = svgNode('svg', {viewBox: `0 0 ${width} ${height}`});
+  const svg = svgNode('svg', {viewBox: `0 0 ${width} ${height}`, 'data-plot-left': left});
   svg.append(svgNode('title', {id: 'svg-title'}, 'EVB platform history chart'),
     svgNode('desc', {id: 'svg-description'}, 'Recorded dates are equally spaced on the horizontal axis, regardless of elapsed time. Platforms are on the vertical axis. Each line represents one EVB.'));
   platforms.forEach((platform, level) => {
@@ -55,9 +80,13 @@ function makeChart(next, requestedWidth) {
       (i - (members.length - 1) / 2) * Math.min(5, 27 / Math.max(1, members.length - 1))));
     const opacity = !selected.size || usedPlatforms.has(platform) ? 1 : .3;
     if (level % 2 === 0) svg.append(svgNode('rect', {x: left, y: top + level * rowHeight, width: width-left-right, height: rowHeight, fill: '#182538', opacity}));
-    svg.append(svgNode('text', {class: 'platform-tick', 'data-platform': platform, role:'button', tabindex:0,
+    const tickLines = axis.lines.get(platform);
+    const tick = svgNode('text', {class: 'platform-tick', 'data-platform': platform, role:'button', tabindex:0,
       'aria-label':`Select all EVBs with history on ${platform}`, x: left-14, y: top+(level+.5)*rowHeight+4,
-      'text-anchor': 'end', fill: '#bdcbdd', opacity}, platform));
+      'text-anchor': 'end', fill: '#bdcbdd', opacity});
+    tickLines.forEach((line, index) => tick.append(svgNode('tspan', {x: left-14,
+      y: top+(level+.5)*rowHeight+4 + (index-(tickLines.length-1)/2)*16}, line)));
+    svg.append(tick);
   });
   const sameYear = dateSpacing(dates) === 64;
   const focusedDates = new Set(visibleRecords.map(record => record.date));
@@ -96,7 +125,7 @@ function updateLineLabels() {
   if (!lineLabelLayer) return;
   lineLabelLayer.replaceChildren();
   const chartRight = Number(chart.getAttribute('width')) - 30;
-  const visibleLeft = Math.max(126, timeline.scrollLeft + 8);
+  const visibleLeft = Math.max(Number(chart.getAttribute('data-plot-left')) || 126, timeline.scrollLeft + 8);
   const visibleRight = Math.min(chartRight, timeline.scrollLeft + timeline.clientWidth - 8);
   const maxY = Number(chart.getAttribute('height')) - 62;
   const occupied = [];
@@ -128,7 +157,8 @@ function updateLineLabels() {
 function timelineAnchor(anchorX = viewportWidth / 2) {
   if (!renderedDates.length) return NaN;
   const width = Number(chart.getAttribute('width'));
-  const fraction = Math.max(0, Math.min(1, (timeline.scrollLeft + anchorX - 126) / Math.max(1, width - 156)));
+  const left = Number(chart.getAttribute('data-plot-left')) || 126;
+  const fraction = Math.max(0, Math.min(1, (timeline.scrollLeft + anchorX - left) / Math.max(1, width - left - 30)));
   const slot = fraction * (renderedDates.length - 1), index = Math.floor(slot);
   const from = day(renderedDates[index]), to = day(renderedDates[Math.min(index + 1, renderedDates.length - 1)]);
   return from + (slot - index) * (to - from);
@@ -146,8 +176,10 @@ function renderTimeline(anchorDate, anchorX = timeline.clientWidth / 2) {
   if (!hasData) {renderedDates = [];lineLabels = [];lineLabelLayer = null;}
   if (!hasData || !viewportWidth) return;
   const dates = recordedDates(data);
-  const plotWidth = Math.max(1, viewportWidth - 156, (dates.length - 1) * dateSpacing(dates)) * timelineZoom;
-  const {svg, labels} = makeChart(data, plotWidth + 156);
+  const axis = platformAxis(data), margins = axis.left + 30;
+  const plotWidth = Math.max(1, viewportWidth - margins, (dates.length - 1) * dateSpacing(dates)) * timelineZoom;
+  const {svg, labels} = makeChart(data, plotWidth + margins, axis);
+  chart.setAttribute('data-plot-left', axis.left);
   chart.setAttribute('viewBox', svg.getAttribute('viewBox'));
   const [, , width, height] = svg.getAttribute('viewBox').split(' ');
   chart.setAttribute('width', width);
@@ -161,7 +193,7 @@ function renderTimeline(anchorDate, anchorX = timeline.clientWidth / 2) {
   chart.append(lineLabelLayer);
   const fraction = Number.isFinite(anchorDate) ? dateSlot(anchorDate, dates) / Math.max(1, dates.length - 1) : 0;
   renderedDates = dates;
-  timeline.scrollLeft = Math.max(0, Math.min(Number(width) - viewportWidth, 126 + fraction * plotWidth - anchorX));
+  timeline.scrollLeft = Math.max(0, Math.min(Number(width) - viewportWidth, axis.left + fraction * plotWidth - anchorX));
   draw();
   updateLineLabels();
 }

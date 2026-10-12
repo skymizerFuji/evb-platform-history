@@ -440,8 +440,11 @@ for (const configured of [false, true]) test(`public page boots with ${configure
   assert.ok(Number(ticks()[1].attrs.x)-Number(ticks()[0].attrs.x)>=64,'Labels retain readable spacing');
   run('applyData({...data,platforms:["BOARD-A","BOARD-B","BOARD-C","BOARD-D"],records:[{evb:"DEMO-EVB",platform:"BOARD-A",date:"2026-09-01",number:1},{evb:"DEMO-EVB",platform:"BOARD-C",date:"2026-09-03",number:2},{evb:"DEMO-B",platform:"BOARD-C",date:"2026-09-02",number:3},{evb:"DEMO-B",platform:"BOARD-D",date:"2026-09-04",number:4},{evb:"DEMO-C",platform:"BOARD-B",date:"2026-09-01",number:5}]})');
   const boardTicks = () => element('chart').children.filter(node => node.attrs.class === 'platform-tick');
-  const boards = () => boardTicks().map(node => node.textContent);
-  const brightBoards = () => boardTicks().filter(node=>node.attrs.opacity==='1').map(node=>node.textContent);
+  const boards = () => boardTicks().map(node => node.attrs['data-platform']);
+  assert.deepEqual(boardTicks().map(node => node.children.map(span => span.textContent).join(' ')),
+    ['BOARD-A', '(DEMO-C) BOARD-B', '(DEMO-EVB) BOARD-C', '(DEMO-B) BOARD-D'],
+    'Platform labels list only current occupants, leaving empty places unprefixed');
+  const brightBoards = () => boardTicks().filter(node=>node.attrs.opacity==='1').map(node=>node.attrs['data-platform']);
   const geometry = () => element('chart').querySelectorAll().map(track=>({id:track.attrs['data-evb'],path:track.children.find(node=>node.attrs.class==='trajectory').attrs.d}));
   const allGeometry = geometry();
   const allBoardPositions = boardTicks().map(node=>node.attrs.y);
