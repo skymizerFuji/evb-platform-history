@@ -34,26 +34,19 @@ function dateSlot(timestamp, dates) {
   return dates.length - 1;
 }
 // Current occupants come from each board's latest normalized record, independent of filtering.
-function platformAxis(next) {
+function currentPlatformCards(next, platform) {
   const latest = new Map();
   for (const record of next.records) {
     const previous = latest.get(record.evb);
     if (!previous || record.date > previous.date) latest.set(record.evb, record);
   }
+  return [...latest.values()].filter(record => record.platform === platform)
+    .map(record => record.evb.replace(/^EVB[\s_-]*/i, ''))
+    .sort((a, b) => a.localeCompare(b, 'en', {numeric: true}));
+}
+function platformAxis(next) {
   const units = text => [...text].reduce((sum, char) => sum + (char.charCodeAt(0) > 255 ? 2 : 1), 0);
-  const lines = new Map(next.platforms.map(platform => {
-    const ids = [...latest.values()].filter(record => record.platform === platform)
-      .map(record => record.evb.replace(/^EVB[\s_-]*/i, ''))
-      .sort((a, b) => a.localeCompare(b, 'en', {numeric: true}));
-    const label = ids.length ? `(${ids.slice(0, 2).join(', ')}${ids.length > 2 ? ', ...' : ''}) ${platform}` : platform;
-    const wrapped = [''];
-    for (const word of label.split(' ')) {
-      const last = wrapped.length - 1;
-      if (wrapped[last] && units(wrapped[last] + ' ' + word) > 48) wrapped.push(word);
-      else wrapped[last] += (wrapped[last] ? ' ' : '') + word;
-    }
-    return [platform, wrapped];
-  }));
+  const lines = new Map(next.platforms.map(platform => [platform, [platform]]));
   const allLines = [...lines.values()];
   // Fit the gutter to the displayed text using the chart's actual font.
   const measure = document.createElement('canvas').getContext?.('2d');
@@ -93,6 +86,11 @@ function makeChart(next, requestedWidth, axis = platformAxis(next)) {
       'text-anchor': 'end', fill: '#bdcbdd', opacity});
     tickLines.forEach((line, index) => tick.append(svgNode('tspan', {x: left-14,
       y: top+(level+.5)*rowHeight+4 + (index-(tickLines.length-1)/2)*16}, line)));
+    tick.addEventListener('pointerenter', event => showPlatformTooltip(tick, event));
+    tick.addEventListener('pointermove', event => showPlatformTooltip(tick, event));
+    tick.addEventListener('pointerleave', hidePlatformTooltip);
+    tick.addEventListener('focus', () => showPlatformTooltip(tick));
+    tick.addEventListener('blur', hidePlatformTooltip);
     svg.append(tick);
   });
   const sameYear = dateSpacing(dates) === 64;
@@ -124,6 +122,28 @@ function makeChart(next, requestedWidth, axis = platformAxis(next)) {
     svg.append(group);
   });
   return {svg, labels};
+}
+let tooltipPlatform = null;
+function hidePlatformTooltip() {
+  tooltip.hidden = true;
+  tooltip.textContent = '';
+  tooltipPlatform?.removeAttribute('aria-describedby');
+  tooltipPlatform = null;
+}
+function showPlatformTooltip(tick, event) {
+  const platform = tick.getAttribute('data-platform');
+  const ids = currentPlatformCards(data, platform);
+  if (tooltipPlatform !== tick) hidePlatformTooltip();
+  tooltipPlatform = tick;
+  tooltip.textContent = `${platform}\n${ids.length ? ids.join(', ') : 'No boards currently at this place.'}`;
+  tooltip.hidden = false;
+  tick.setAttribute('aria-describedby', 'tooltip');
+  const bounds = tick.getBoundingClientRect();
+  const x = event?.clientX ?? bounds.right;
+  const y = event?.clientY ?? bounds.top;
+  const width = globalThis.innerWidth || 1024, height = globalThis.innerHeight || 768;
+  tooltip.style.left = Math.max(8, Math.min(x + 12, width - tooltip.offsetWidth - 8)) + 'px';
+  tooltip.style.top = Math.max(8, Math.min(y + 12, height - tooltip.offsetHeight - 8)) + 'px';
 }
 const timeline = $('timeline-scroll');
 let timelineZoom = 1, viewportWidth = timeline.clientWidth, renderedDates = [];
@@ -171,6 +191,7 @@ function timelineAnchor(anchorX = viewportWidth / 2) {
   return from + (slot - index) * (to - from);
 }
 function renderTimeline(anchorDate, anchorX = timeline.clientWidth / 2) {
+  hidePlatformTooltip();
   const hasData = data.records.length > 0;
   $('timeline-controls').hidden = false;
   $('zoom-range').disabled = !hasData;
@@ -215,7 +236,7 @@ $('zoom-range').addEventListener('input', event => zoomTimeline(Number(event.tar
 $('zoom-out').addEventListener('click', () => zoomTimeline(timelineZoom / 1.25));
 $('zoom-in').addEventListener('click', () => zoomTimeline(timelineZoom * 1.25));
 $('zoom-fit').addEventListener('click', () => zoomTimeline(1));
-timeline.addEventListener('scroll', updateLineLabels, {passive:true});
+timeline.addEventListener('scroll', () => {hidePlatformTooltip(); updateLineLabels();}, {passive:true});
 timeline.addEventListener('wheel', event => {
   if (!(event.ctrlKey || event.metaKey) || !data.records.length) return;
   event.preventDefault();

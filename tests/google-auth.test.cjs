@@ -330,6 +330,9 @@ for (const configured of [false, true]) test(`public page boots with ${configure
     get childNodes() {return this.children;}
     addEventListener(key,callback) {this.events[key]=callback;}
     focus() {this.focused=true;}
+    getBoundingClientRect() {return {right:100,top:80};}
+    get offsetWidth() {return 250;}
+    get offsetHeight() {return 100;}
     querySelectorAll() {return this.children.filter(node => node.attrs.class === 'evb-track');}
   }
   const elements = new Map();
@@ -442,8 +445,8 @@ for (const configured of [false, true]) test(`public page boots with ${configure
   const boardTicks = () => element('chart').children.filter(node => node.attrs.class === 'platform-tick');
   const boards = () => boardTicks().map(node => node.attrs['data-platform']);
   assert.deepEqual(boardTicks().map(node => node.children.map(span => span.textContent).join(' ')),
-    ['BOARD-A', '(DEMO-C) BOARD-B', '(DEMO-EVB) BOARD-C', '(DEMO-B) BOARD-D'],
-    'Platform labels list only current occupants, leaving empty places unprefixed');
+    ['BOARD-A', 'BOARD-B', 'BOARD-C', 'BOARD-D'],
+    'Axis labels contain only place names');
   const brightBoards = () => boardTicks().filter(node=>node.attrs.opacity==='1').map(node=>node.attrs['data-platform']);
   const geometry = () => element('chart').querySelectorAll().map(track=>({id:track.attrs['data-evb'],path:track.children.find(node=>node.attrs.class==='trajectory').attrs.d}));
   const allGeometry = geometry();
@@ -544,8 +547,35 @@ for (const configured of [false, true]) test(`public page boots with ${configure
   assert.deepEqual(labeledIDs(),['LABEL-A','LABEL-B'],'Single-date lines can be labeled');
   assert.ok(Math.abs(Number(labels()[0].attrs.y)-Number(labels()[1].attrs.y))>=18,'Nearby labels avoid overlapping');
   assert.ok(!/NaN|Infinity/.test(JSON.stringify(labelLayer().children)));
+  run('select(null);applyData({...data,platforms:["A","B"],records:[{evb:"EVB 2",platform:"A",date:"2026-09-02"},{evb:"EVB 10",platform:"A",date:"2026-09-02"},{evb:"EVB 3",platform:"A",date:"2026-09-02"},{evb:"EVB 4",platform:"A",date:"2026-09-01"},{evb:"EVB 4",platform:"B",date:"2026-09-02"}]})');
+  const placeTick = name => boardTicks().find(node=>node.attrs['data-platform']===name);
+  const hover = name => placeTick(name).events.pointerenter({clientX:1000,clientY:750});
+  const tooltip = element('tooltip');
+  const gutter = element('chart').attrs['data-plot-left'];
+  hover('A');
+  assert.equal(tooltip.hidden,false);
+  assert.equal(tooltip.textContent,'A\n2, 3, 10','Hover shows all current IDs, naturally sorted, without EVB prefixes or truncation');
+  assert.equal(placeTick('A').attrs['aria-describedby'],'tooltip');
+  assert.ok(parseFloat(tooltip.style.left)+tooltip.offsetWidth<=1024);
+  assert.ok(parseFloat(tooltip.style.top)+tooltip.offsetHeight<=768);
+  placeTick('A').events.pointerleave();
+  assert.equal(tooltip.hidden,true);
+  placeTick('B').events.focus();
+  assert.equal(tooltip.textContent,'B\n4','Keyboard focus also displays current occupants');
+  element('chart').events.keydown({key:'Escape'});
+  assert.equal(tooltip.hidden,true);
+  hover('A');
+  run('applyData({...data,records:[...data.records,{evb:"EVB 2",platform:"B",date:"2026-09-03"},{evb:"EVB 3",platform:"B",date:"2026-09-03"},{evb:"EVB 10",platform:"B",date:"2026-09-03"}]})');
+  assert.equal(tooltip.hidden,true,'Refresh clears stale hover details');
+  assert.equal(element('chart').attrs['data-plot-left'],gutter,'Card count and moves do not change axis indentation');
+  hover('A');
+  assert.equal(tooltip.textContent,'A\nNo boards currently at this place.');
+  hover('B');
+  assert.equal(tooltip.textContent,'B\n2, 3, 4, 10','Refreshed tooltip includes every card now at the place');
   element('disconnect-google').events.click({stopPropagation(){}});
   assert.equal(run('data.records.length'),0);
+  assert.equal(tooltip.hidden,true,'Disconnect hides the tooltip');
+  assert.equal(tooltip.textContent,'','Disconnect clears tooltip data');
   assert.equal(run('histories.size'),0);
   assert.equal(run('selected.size'),0);
   assert.equal(run('document.body.getAttribute("data-auth-required")'),'true');
