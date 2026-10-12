@@ -72,8 +72,7 @@ function makeChart(next, requestedWidth, axis = platformAxis(next)) {
   const positions = new Map();
   const labels = [];
   const svg = svgNode('svg', {viewBox: `0 0 ${width} ${height}`, 'data-plot-left': left});
-  svg.append(svgNode('title', {id: 'svg-title'}, 'EVB platform history chart'),
-    svgNode('desc', {id: 'svg-description'}, 'Recorded dates are equally spaced on the horizontal axis, regardless of elapsed time. Platforms are on the vertical axis. Each line represents one EVB.'));
+  svg.append(svgNode('desc', {id: 'svg-description'}, 'Recorded dates are equally spaced on the horizontal axis, regardless of elapsed time. Platforms are on the vertical axis. Each line represents one EVB.'));
   platforms.forEach((platform, level) => {
     const members = ids.filter(evb => next.records.some(r => r.evb === evb && r.platform === platform));
     members.forEach((evb, i) => positions.set(JSON.stringify([platform, evb]), top + (level + .5) * rowHeight +
@@ -285,7 +284,6 @@ function clearLiveData(message) {
   chart.style.width = width + 'px'; chart.style.minWidth = width + 'px'; chart.style.height = '670px';
   timeline.scrollLeft = 0;
   chart.replaceChildren(
-    svgNode('title', {id: 'svg-title'}, 'EVB platform history chart'),
     svgNode('desc', {id: 'svg-description'}, 'Sign in to load authorized Google Sheets data.'),
     svgNode('text', {x: 20, y: 180, fill: '#a6b7cb', 'font-size': 14}, 'Sign in to view Google Sheets data.')
   );

@@ -27,8 +27,7 @@ template = template.replace('<script id="evb-data"',
 payload = {'year': config['year'], 'source': {'spreadsheetId': config['spreadsheetId'],
            'mode': 'google-oauth', 'refreshSeconds': 60}, 'platforms': [], 'records': []}
 placeholder = ('<svg id="chart" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 670" '
-               'width="1100" height="670" role="img" aria-labelledby="svg-title svg-description">'
-               '<title id="svg-title">EVB platform history chart</title>'
+               'width="1100" height="670" role="img" aria-labelledby="chart-title" aria-describedby="svg-description">'
                '<desc id="svg-description">Sign in to view authorized Google Sheets data.</desc>'
                '<text x="30" y="180" fill="#a6b7cb" font-size="14">Sign in to view Google Sheets data.</text></svg>')
 html = template.replace('__EVB_DATA__', json.dumps(payload).replace('<', '\\u003c')).replace('__EVB_CHART__', placeholder)

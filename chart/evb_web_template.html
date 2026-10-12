@@ -141,7 +141,6 @@ function draw(){
     track.setAttribute('data-highlighted',String(highlighted));
   });
   if(selected.size)chart.setAttribute('data-selected',[...selected].join(','));else chart.removeAttribute('data-selected');
-  $('svg-title').textContent=$('chart-title').textContent;
 }
 chart.addEventListener('click',event=>{
   const track=event.target.closest('[data-evb]');
